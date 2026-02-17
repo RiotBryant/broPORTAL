@@ -1,32 +1,42 @@
+import { createClient } from "@/lib/supabase/server";
 
-import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
+export default async function AdminInbox() {
+  const supabase = createClient();
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const { data: requests } = await supabase
+    .from("access_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  return (
+    <div style={{ padding: 40 }}>
+      <h1>Access Requests</h1>
+
+      {requests?.map((req) => (
+        <div key={req.id} style={{
+          border: "1px solid #333",
+          padding: 20,
+          marginBottom: 20,
+          borderRadius: 12
+        }}>
+          <strong>{req.full_name}</strong>
+          <p>{req.email}</p>
+          <p>{req.message}</p>
+          <p>Status: {req.status}</p>
+
+          {req.status === "pending" && (
+            <>
+              <form action={`/api/admin/access-requests/${req.id}/approve`} method="post">
+                <button>Approve</button>
+              </form>
+
+              <form action={`/api/admin/access-requests/${req.id}/deny`} method="post">
+                <button>Den y</button>
+              </form>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
   );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["admin", "superadmin"].includes(profile.role)) {
-    redirect("/portal");
-  }
-
-  return <>{children}</>;
 }
