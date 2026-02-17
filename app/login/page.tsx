@@ -162,6 +162,22 @@ export default function LoginPage() {
             {loading ? "Entering..." : "Enter Portal"}
           </button>
         </form>
+<button
+  type="button"
+  className="btn btnSecondary"
+  onClick={() => router.push("/forgot-password")}
+>
+  Forgot password
+</button>
+
+<button
+  type="button"
+  className="btn btnSecondary"
+  onClick={() => router.push("/members/request-access")}
+  style={{ marginTop: 10 }}
+>
+  Request Access
+</button>
 
         <button
           className="btn btnSecondary"
