@@ -30,3 +30,7 @@ export async function getMyRole(): Promise<Role> {
   const r = (data?.role ?? "member") as Role;
   return r;
 }
+export type NextEvent = {
+  title: string;
+  starts_at: string; // ISO string
+};
