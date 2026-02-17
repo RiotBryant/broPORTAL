@@ -2,36 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { APP } from "@/lib/config";
 
 export default function LoginPage() {
   const router = useRouter();
   const [redirectTo, setRedirectTo] = useState("/members");
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [pass, setPass] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
     setRedirectTo(url.searchParams.get("redirect") || "/members");
   }, []);
 
-  async function onSubmit(e: React.FormEvent) {
+  function setGateCookie() {
+    // Set a simple cookie recognized by middleware
+    document.cookie = `brot_gate=1; Path=/; SameSite=Lax`;
+  }
+
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    setLoading(false);
-
-    if (error) {
-      setMsg(error.message);
+    if (pass !== APP.SHARED_PASSWORD) {
+      setMsg("Wrong password.");
       return;
     }
 
+    setGateCookie();
     router.replace(redirectTo);
     router.refresh();
   }
@@ -40,16 +38,16 @@ export default function LoginPage() {
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20 }}>
       <div style={{
         width: "100%",
-        maxWidth: 420,
+        maxWidth: 520,
         border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 20,
-        padding: 18,
-        background: "rgba(255,255,255,0.05)"
+        borderRadius: 22,
+        background: "rgba(255,255,255,0.05)",
+        padding: 18
       }}>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Log in</h1>
-        <p style={{ marginTop: 8, color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
-          Continue to the broT portal.
-        </p>
+        <div style={{ fontWeight: 900, fontSize: 22 }}>broT Portal</div>
+        <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+          Members-only gate (skeleton mode). Later we switch to Supabase accounts.
+        </div>
 
         {msg && (
           <div style={{
@@ -64,33 +62,14 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 10 }}>
+        <form onSubmit={onSubmit} style={{ marginTop: 14, display: "grid", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Email</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Portal Password</div>
             <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              required
-              style={{
-                width: "100%",
-                marginTop: 6,
-                padding: "10px 12px",
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(0,0,0,0.35)",
-                color: "white"
-              }}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Password</div>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
               type="password"
-              required
+              placeholder="Enter password"
               style={{
                 width: "100%",
                 marginTop: 6,
@@ -105,21 +84,22 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
             style={{
-              marginTop: 4,
               padding: "10px 12px",
               borderRadius: 999,
               border: "none",
               background: "white",
               color: "black",
-              fontWeight: 800,
-              cursor: "pointer",
-              opacity: loading ? 0.6 : 1
+              fontWeight: 900,
+              cursor: "pointer"
             }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            Enter Portal
           </button>
+
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
+            Redirect target: <span style={{ color: "rgba(255,255,255,0.85)" }}>{redirectTo}</span>
+          </div>
         </form>
       </div>
     </div>
