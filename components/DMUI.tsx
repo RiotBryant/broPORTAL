@@ -6,8 +6,8 @@ import { store } from "@/lib/store";
 import { getMyRole } from "@/lib/store";
 
 export default function DMUI({ threadId }: { threadId?: string }) {
-  const me = mockMe();
-  const directory = useMemo(() => mockDirectory(), []);
+  const me = member();
+  const directory = useMemo(() => Directory(), []);
   const [text, setText] = useState("");
 
   const [threads, setThreads] = useState(store.dm.listThreads());
