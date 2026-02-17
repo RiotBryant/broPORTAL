@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { getMyRole } from "@/lib/store";
 
 type Badge = {
   id: string;
