@@ -17,13 +17,13 @@ export default function MembersHome() {
     let alive = true;
 
     async function loadUserRole() {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-const user = authData?.user; // ✅ after this change it will be real
+      const { data, error } = await supabase.auth.getUser();
+const user = data?.user;
 
-      if (authErr || !user) {
-        window.location.href = "/login";
-        return;
-      }
+if (error || !user) {
+  window.location.href = "/login";
+  return;
+}
 
       const { data, error } = await supabase
         .from("user_roles")
