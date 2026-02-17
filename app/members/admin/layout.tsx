@@ -1,32 +1,23 @@
-
-import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: auth, error: authErr } = await supabase.auth.getUser();
+  const user = auth?.user;
 
-  if (!user) redirect("/login");
+  if (authErr || !user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
+  const { data: roleRow } = await supabase
+    .from("user_roles")
     .select("role")
-    .eq("id", user.id)
-    .single();
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  if (!profile || !["admin", "superadmin"].includes(profile.role)) {
-    redirect("/portal");
-  }
+  const role = (roleRow?.role ?? "member") as string;
+
+  if (role !== "admin" && role !== "superadmin") redirect("/members");
 
   return <>{children}</>;
 }
