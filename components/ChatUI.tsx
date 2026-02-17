@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { store } from "@/lib/store";
-import { getMyRole } from "@/lib/store";
 
 export default function ChatUI() {
   const me = { id: "me", name: "You" };
