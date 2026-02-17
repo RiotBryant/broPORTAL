@@ -1,16 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
 import Countdown from "@/components/Countdown";
-import { mockMe } from "@/lib/mock";
+import { supabase } from "@/lib/supabase/client";
+
+type Role = "member" | "admin" | "superadmin";
 
 export default function MembersHome() {
-  // Skeleton mode: fake role/user (later comes from Supabase)
-  const me = mockMe();
-  const isAdmin = useMemo(() => me.role === "admin" || me.role === "superadmin", [me.role]);
+  const [role, setRole] = useState<Role>("member");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadUserRole() {
+      const { data: authData, error: authErr } =
+        await supabase.auth.getUser();
+
+      const user = authData?.user;
+
+      if (authErr || !user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!alive) return;
+
+      if (error || !data) {
+        setRole("member");
+      } else {
+        setRole((data.role as Role) ?? "member");
+      }
+
+      setLoading(false);
+    }
+
+    loadUserRole();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const isAdmin = useMemo(
+    () => role === "admin" || role === "superadmin",
+    [role]
+  );
 
   return (
     <>
@@ -19,11 +63,30 @@ export default function MembersHome() {
         subtitle="Quiet by design • presence over performance"
         right={
           <>
-            {isAdmin ? (
-              <Link className="pill pillPrimary" href="/members/admin/inbox">Admin Inbox</Link>
-            ) : null}
-            <Link className="pill" href="/members/profile">Profile</Link>
-            <Link className="pill" href="/login">Log out</Link>
+            {isAdmin && (
+              <Link
+                className="pill pillPrimary"
+                href="/members/admin/inbox"
+              >
+                Admin Inbox
+              </Link>
+            )}
+
+            <Link className="pill" href="/members/profile">
+              Profile
+            </Link>
+
+            <Link
+              className="pill"
+              href="#"
+              onClick={async (e) => {
+                e.preventDefault();
+                await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
+            >
+              Log out
+            </Link>
           </>
         }
       />
@@ -31,15 +94,23 @@ export default function MembersHome() {
       <div className="hero">
         <div className="heroRow">
           <div className="chipRow">
-            <div className="chip">Role: <b>{me.role}</b></div>
+            <div className="chip">
+              Role: <b>{loading ? "…" : role}</b>
+            </div>
             <div className="chip">Nothing auto-joins</div>
             <div className="chip">Nothing is recorded</div>
           </div>
 
           <div className="heroButtons">
-            <Link className="cta ctaPrimary" href="/members/support">Request Support</Link>
-            <Link className="cta" href="/members/lounge">Enter Lounge</Link>
-            <Link className="cta" href="/members/forms">Forms</Link>
+            <Link className="cta ctaPrimary" href="/members/support">
+              Request Support
+            </Link>
+            <Link className="cta" href="/members/lounge">
+              Enter Lounge
+            </Link>
+            <Link className="cta" href="/members/forms">
+              Forms
+            </Link>
           </div>
         </div>
 
@@ -59,8 +130,12 @@ export default function MembersHome() {
           desc="Real-time group room. Keep it intentional."
           actions={
             <>
-              <Link className="btn btnPrimary" href="/members/chat">Open broCHAT →</Link>
-              <Link className="btn btnGhost" href="/members/inbox">DM Inbox</Link>
+              <Link className="btn btnPrimary" href="/members/chat">
+                Open broCHAT →
+              </Link>
+              <Link className="btn btnGhost" href="/members/inbox">
+                DM Inbox
+              </Link>
             </>
           }
         />
@@ -71,8 +146,15 @@ export default function MembersHome() {
           desc="Choose a door. Jitsi links live here."
           actions={
             <>
-              <Link className="btn btnPrimary" href="/members/lounge">Enter Lounge</Link>
-              <Link className="btn btnGhost" href="/members/room/weekly">Next Meeting Room</Link>
+              <Link className="btn btnPrimary" href="/members/lounge">
+                Enter Lounge
+              </Link>
+              <Link
+                className="btn btnGhost"
+                href="/members/room/weekly"
+              >
+                Next Meeting Room
+              </Link>
             </>
           }
         />
@@ -83,8 +165,12 @@ export default function MembersHome() {
           desc="Events list + countdown."
           actions={
             <>
-              <Link className="btn btnPrimary" href="/members/calendar">Open Calendar</Link>
-              <Link className="btn btnGhost" href="/members/vote">Voting</Link>
+              <Link className="btn btnPrimary" href="/members/calendar">
+                Open Calendar
+              </Link>
+              <Link className="btn btnGhost" href="/members/vote">
+                Voting
+              </Link>
             </>
           }
         />
@@ -95,8 +181,12 @@ export default function MembersHome() {
           desc="Answers from your docs and routes requests."
           actions={
             <>
-              <Link className="btn btnPrimary" href="/members/brobot">Signal broBOT</Link>
-              <Link className="btn btnGhost" href="/members/badges">Badges</Link>
+              <Link className="btn btnPrimary" href="/members/brobot">
+                Signal broBOT
+              </Link>
+              <Link className="btn btnGhost" href="/members/badges">
+                Badges
+              </Link>
             </>
           }
         />
