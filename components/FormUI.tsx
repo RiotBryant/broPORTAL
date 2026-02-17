@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { store } from "@/lib/store";
 import Link from "next/link";
-import { mockMe } from "@/lib/mock";
+import { getMyRole } from "@/lib/store";
 
 export default function FormUI({ kind }: { kind: "support" | "access" }) {
   const me = mockMe();
