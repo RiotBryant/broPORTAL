@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { getMyRole } from "@/lib/store";
 import { useEffect, useState } from "react";
+import { getMyRole } from "@/lib/store";
 import type { Role } from "@/lib/store";
 
 export default function VoteUI() {
