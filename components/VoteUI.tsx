@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { mockPoll } from "@/lib/mock";
 import { getMyRole } from "@/lib/store";
 import { useEffect, useState } from "react";
 import type { Role } from "@/lib/store";
 
 export default function VoteUI() {
-  const poll = mockPoll();
+  const poll = Poll();
   const [picked, setPicked] = useState<string | null>(null);
 
   return (
