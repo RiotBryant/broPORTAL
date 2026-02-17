@@ -1,4 +1,4 @@
-import { mockEvents } from "@/lib/mock";
+import { mockEvents } from "@/lib/store";
 
 export default function CalendarUI() {
   const events = mockEvents();
