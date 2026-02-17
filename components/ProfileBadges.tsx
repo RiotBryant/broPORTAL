@@ -3,19 +3,21 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-type BadgeRow = {
-  badges: {
-    id: string;
-    name: string;
-    slug: string;
-    icon: string | null;
-    description: string | null;
-  } | null;
+type Badge = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  description: string | null;
+};
+
+type AwardRow = {
+  badge_id: Badge | null;
 };
 
 export default function ProfileBadges({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<BadgeRow[]>([]);
+  const [badges, setBadges] = useState<Badge[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -25,7 +27,7 @@ export default function ProfileBadges({ userId }: { userId: string }) {
 
       const { data, error } = await supabase
         .from("badge_awards")
-        .select("badges:badge_id(id,name,slug,icon,description)")
+        .select("badge_id(id,name,slug,icon,description)")
         .eq("user_id", userId)
         .is("revoked_at", null);
 
@@ -33,9 +35,11 @@ export default function ProfileBadges({ userId }: { userId: string }) {
 
       if (error) {
         console.error(error);
-        setItems([]);
+        setBadges([]);
       } else {
-        setItems((data ?? []) as BadgeRow[]);
+        const rows = (data ?? []) as AwardRow[];
+        const list = rows.map((r) => r.badge_id).filter(Boolean) as Badge[];
+        setBadges(list);
       }
 
       setLoading(false);
@@ -46,8 +50,6 @@ export default function ProfileBadges({ userId }: { userId: string }) {
     };
   }, [userId]);
 
-  const badgeList = items.map((x) => x.badges).filter(Boolean) as NonNullable<BadgeRow["badges"]>[];
-
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div className="text-lg font-semibold">Badges</div>
@@ -56,10 +58,10 @@ export default function ProfileBadges({ userId }: { userId: string }) {
       <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
         {loading ? (
           <div className="chip">Loading…</div>
-        ) : badgeList.length === 0 ? (
+        ) : badges.length === 0 ? (
           <div className="chip">No badges yet</div>
         ) : (
-          badgeList.map((b) => (
+          badges.map((b) => (
             <div key={b.id} className="chip">
               <b>{b.icon ? `${b.icon} ` : ""}{b.name}</b>
             </div>
