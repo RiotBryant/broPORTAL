@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getMyRole } from "@/lib/store";
 
 export default function FormUI({ kind }: { kind: "support" | "access" }) {
-  const me = mockMe();
+  const role = "member"();
   const [subject, setSubject] = useState(kind === "access" ? "Request Access" : "");
   const [category, setCategory] = useState(kind === "access" ? "access" : "support");
   const [body, setBody] = useState("");
