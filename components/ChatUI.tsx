@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { store } from "@/lib/store";
-import { mockMe } from "@/lib/mock";
+import { getMyRole } from "@/lib/store";
 
 export default function ChatUI() {
   const me = mockMe();
