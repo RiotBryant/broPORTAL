@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -6,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMyRole } from "@/lib/store";
-import { ROOMS, type RoomSlug } from "@/lib/rooms";
+
+type Role = "member" | "admin" | "superadmin";
 
 type RoomRow = {
   id: string;
+  slug: string;
   name: string;
   provider: "meet" | "jaas8x8";
   url: string;
@@ -30,28 +31,26 @@ function canSee(userRole: Role, minRole: Role) {
 // Converts a room URL into a safe embed URL
 function toEmbedUrl(room: RoomRow) {
   const raw = (room.url || "").trim();
+  if (!raw) return "";
 
-  // Default: if it's already an embed link, keep it
+  // If it's already an embed link, keep it
   if (raw.includes("/iframe")) return raw;
 
   // meet.jit.si -> /<roomName>#config.prejoinPageEnabled=false
   if (room.provider === "meet") {
-    // raw could be https://meet.jit.si/RoomName
-    // embed endpoint: https://meet.jit.si/RoomName#config.prejoinPageEnabled=false
     const u = new URL(raw);
     const roomPath = u.pathname; // "/RoomName"
     return `https://meet.jit.si${roomPath}#config.prejoinPageEnabled=false`;
   }
 
-  // 8x8.vc / JaaS: many links are already embeddable as-is in an iframe
-  // If you ever use a special embed endpoint, you can tweak here.
+  // 8x8 / JaaS: many links are embeddable as-is
   return raw;
 }
 
 export default function RoomPage() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const roomId = params?.id;
+  const params = useParams<{ slug: string }>();
+  const slug = params?.slug;
 
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<Role>("member");
@@ -62,23 +61,31 @@ export default function RoomPage() {
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       setErr("");
+
+      if (!slug || typeof slug !== "string") {
+        setErr("Room slug is missing.");
+        setRoom(null);
+        setLoading(false);
+        return;
+      }
 
       // Auth gate
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session) {
-        router.replace(`/login?next=${encodeURIComponent(`/members/room/${roomId}`)}`);
+        router.replace(`/login?next=${encodeURIComponent(`/members/room/${slug}`)}`);
         return;
       }
 
       const r: Role = await getMyRole().catch(() => "member" as Role);
       setRole(r);
 
-      // Load room by UUID
+      // Load room by SLUG (not UUID)
       const { data, error } = await supabase
         .from("rooms")
-        .select("id,name,provider,url,min_role,logo_url")
-        .eq("id", roomId)
+        .select("id,slug,name,provider,url,min_role,logo_url")
+        .eq("slug", slug)
         .single();
 
       if (error || !data) {
@@ -102,7 +109,7 @@ export default function RoomPage() {
       setRoom(row);
       setLoading(false);
     })();
-  }, [router, roomId]);
+  }, [router, slug]);
 
   if (loading) {
     return (
@@ -117,13 +124,19 @@ export default function RoomPage() {
       <div className="min-h-screen bg-black text-white">
         <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
           <div className="flex items-center justify-between gap-3">
-            <Link href="/members/lounge" className="pill">← Back to Lounge</Link>
-            <div className="text-sm text-white/60">role: <b>{role}</b></div>
+            <Link href="/members/lounge" className="pill">
+              ← Back to Lounge
+            </Link>
+            <div className="text-sm text-white/60">
+              role: <b>{role}</b>
+            </div>
           </div>
 
           <div className="card" style={{ marginTop: 18 }}>
             <div className="text-lg font-semibold">Can’t open room</div>
-            <div className="text-sm text-white/65" style={{ marginTop: 8 }}>{err}</div>
+            <div className="text-sm text-white/65" style={{ marginTop: 8 }}>
+              {err}
+            </div>
           </div>
         </div>
 
@@ -137,6 +150,8 @@ export default function RoomPage() {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            text-decoration: none;
+            color: white;
           }
           .card {
             background: rgba(255,255,255,0.035);
@@ -156,12 +171,15 @@ export default function RoomPage() {
           <div>
             <div className="text-lg font-semibold">{room?.name}</div>
             <div className="text-sm text-white/60">
-              provider: <b>{room?.provider}</b> • min role: <b>{room?.min_role}</b>
+              provider: <b>{room?.provider}</b> • min role: <b>{room?.min_role}</b> • slug:{" "}
+              <b>{room?.slug}</b>
             </div>
           </div>
 
           <div className="flex gap-2">
-            <Link href="/members/lounge" className="pill">← Lounge</Link>
+            <Link href="/members/lounge" className="pill">
+              ← Lounge
+            </Link>
             <a className="pill pillPrimary" href={room?.url || "#"} target="_blank" rel="noreferrer">
               Open direct
             </a>
@@ -193,8 +211,16 @@ export default function RoomPage() {
           color: white;
           font-size: 14px;
         }
-        .pill:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); }
-        .pillPrimary { background: #fff; color:#000; border:none; }
+        .pill:hover {
+          transform: translateY(-1px);
+          border-color: rgba(255,255,255,0.22);
+          background: rgba(255,255,255,0.08);
+        }
+        .pillPrimary {
+          background: #fff;
+          color:#000;
+          border:none;
+        }
         .frameWrap {
           border-radius: 24px;
           overflow: hidden;
