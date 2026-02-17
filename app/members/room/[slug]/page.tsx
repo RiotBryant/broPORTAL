@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMyRole } from "@/lib/store";
-import type { Role } from "@/lib/store";
+import { ROOMS, type RoomSlug } from "@/lib/rooms";
 
 type RoomRow = {
   id: string;
