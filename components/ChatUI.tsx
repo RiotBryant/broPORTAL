@@ -6,7 +6,7 @@ import { store } from "@/lib/store";
 import { getMyRole } from "@/lib/store";
 
 export default function ChatUI() {
-  const me = mockMe();
+  const me = { id: "me", name: "You" };
   const [text, setText] = useState("");
   const [items, setItems] = useState(store.group.list());
 
