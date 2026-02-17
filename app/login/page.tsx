@@ -1,106 +1,174 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { APP } from "@/lib/config";
+import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [redirectTo, setRedirectTo] = useState("/members");
-  const [pass, setPass] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    setRedirectTo(url.searchParams.get("redirect") || "/members");
-  }, []);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function setGateCookie() {
-    // Set a simple cookie recognized by middleware
-    document.cookie = `brot_gate=1; Path=/; SameSite=Lax`;
-  }
-
-  function onSubmit(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
+    setError(null);
+    setLoading(true);
 
-    if (pass !== APP.SHARED_PASSWORD) {
-      setMsg("Wrong password.");
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
       return;
     }
 
-    setGateCookie();
-    router.replace(redirectTo);
-    router.refresh();
+    router.replace("/members");
   }
 
+  const styles = `
+    :root { color-scheme: dark; }
+
+    .page {
+      min-height: 100vh;
+      background: #07070b;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 24px;
+      padding: 32px;
+      background: radial-gradient(
+        900px 400px at 50% 0%,
+        rgba(80,170,255,0.15),
+        transparent
+      ),
+      rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 0 60px rgba(80,170,255,0.06);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    p {
+      margin: 0 0 24px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+    }
+
+    .input {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: white;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .input:focus {
+      border-color: rgba(80,170,255,0.6);
+      box-shadow: 0 0 0 1px rgba(80,170,255,0.6);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    .btnPrimary {
+      background: white;
+      color: black;
+      margin-bottom: 12px;
+    }
+
+    .btnSecondary {
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .error {
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #ff6b6b;
+    }
+  `;
+
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20 }}>
-      <div style={{
-        width: "100%",
-        maxWidth: 520,
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 22,
-        background: "rgba(255,255,255,0.05)",
-        padding: 18
-      }}>
-        <div style={{ fontWeight: 900, fontSize: 22 }}>broT Portal</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
-          Members-only gate (skeleton mode). Later we switch to Supabase accounts.
-        </div>
+    <div className="page">
+      <style>{styles}</style>
 
-        {msg && (
-          <div style={{
-            marginTop: 12,
-            padding: "10px 12px",
-            borderRadius: 14,
-            border: "1px solid rgba(255,80,80,0.35)",
-            background: "rgba(255,80,80,0.08)",
-            fontSize: 13
-          }}>
-            {msg}
-          </div>
-        )}
+      <div className="card">
+        <h1>broPORTAL</h1>
+        <p>Quiet by design • presence over performance</p>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 14, display: "grid", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Portal Password</div>
-            <input
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              type="password"
-              placeholder="Enter password"
-              style={{
-                width: "100%",
-                marginTop: 6,
-                padding: "10px 12px",
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(0,0,0,0.35)",
-                color: "white"
-              }}
-            />
-          </div>
+        <form onSubmit={handleLogin}>
+          {error && <div className="error">{error}</div>}
+
+          <input
+            type="email"
+            placeholder="Email"
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
 
           <button
             type="submit"
-            style={{
-              padding: "10px 12px",
-              borderRadius: 999,
-              border: "none",
-              background: "white",
-              color: "black",
-              fontWeight: 900,
-              cursor: "pointer"
-            }}
+            className="btn btnPrimary"
+            disabled={loading}
           >
-            Enter Portal
+            {loading ? "Entering..." : "Enter Portal"}
           </button>
-
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
-            Redirect target: <span style={{ color: "rgba(255,255,255,0.85)" }}>{redirectTo}</span>
-          </div>
         </form>
+
+        <button
+          className="btn btnSecondary"
+          onClick={() => router.push("/members/request-access")}
+        >
+          Request Access
+        </button>
       </div>
     </div>
   );
