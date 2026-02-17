@@ -1,46 +1,63 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMyRole, isAdminRole } from "@/lib/store";
+import type { Role } from "@/lib/store";
 
-type Room = {
-  slug: string;
-  title: string;
-  subtitle: string | null;
-  is_admin_only: boolean;
+type RoomRow = {
+  id: string;
+  name: string;
+  provider: "meet" | "jaas8x8";
+  url: string;
+  min_role: Role;
+  logo_url: string | null;
 };
+
+const ROLE_RANK: Record<Role, number> = {
+  member: 0,
+  admin: 1,
+  superadmin: 2,
+};
+
+function canSee(userRole: Role, minRole: Role) {
+  return ROLE_RANK[userRole] >= ROLE_RANK[minRole];
+}
 
 export default function LoungePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<Role>("member");
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
+
+  const isAdmin = useMemo(() => isAdminRole(role), [role]);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
         router.replace(`/login?next=${encodeURIComponent("/members/lounge")}`);
         return;
       }
 
-     import type { Role } from "@/lib/store";
+      const r: Role = await getMyRole().catch(() => "member" as Role);
+      setRole(r);
 
-const role: Role = await getMyRole().catch(() => "member" as Role);
-setIsAdmin(isAdminRole(role));
-
-      setIsAdmin(isAdminRole(role));
-
-      const { data: rows } = await supabase
+      const { data, error } = await supabase
         .from("rooms")
-        .select("slug,title,subtitle,is_admin_only")
-        .eq("is_active", true)
+        .select("id,name,provider,url,min_role,logo_url")
         .order("created_at", { ascending: true });
 
-      setRooms((rows ?? []) as Room[]);
+      if (error) {
+        console.error(error);
+        setRooms([]);
+      } else {
+        const all = (data ?? []) as RoomRow[];
+        setRooms(all.filter((rm) => canSee(r, rm.min_role)));
+      }
+
       setLoading(false);
     })();
   }, [router]);
@@ -55,36 +72,65 @@ setIsAdmin(isAdminRole(role));
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="wrap" style={{ width: "min(980px, calc(100% - 24px))", margin: "0 auto", padding: "24px 0 36px" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-lg font-semibold">broT Lounge</div>
-            <div className="text-sm text-white/60">Choose a room. Nothing auto-joins.</div>
+            <div className="text-sm text-white/60">
+              Choose a room. Min role enforced. Your role: <b>{role}</b>
+            </div>
           </div>
 
           <div className="flex gap-2">
-            <Link href="/members" className="btn">← Back</Link>
+            <Link href="/members" className="pill">← Back</Link>
+            {isAdmin ? <Link href="/members/admin/events" className="pill pillPrimary">Admin Events</Link> : null}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {rooms
-            .filter((r) => !r.is_admin_only || isAdmin)
-            .map((r) => (
-              <Link
-                key={r.slug}
-                href={`/members/room/${r.slug}`}
-                className="card hover:opacity-95 transition"
-              >
-                <div className="text-base font-semibold">{r.title}</div>
-                <div className="text-sm text-white/65 mt-1">{r.subtitle}</div>
-                <div className="mt-4">
-                  <span className="btn btnPrimary">Enter</span>
-                </div>
-              </Link>
-            ))}
+        <div style={{ marginTop: 18 }} className="grid gap-3 sm:grid-cols-2">
+          {rooms.map((r) => (
+            <a
+              key={r.id}
+              href={r.url}
+              target="_blank"
+              rel="noreferrer"
+              className="card hover:opacity-95 transition"
+            >
+              <div className="text-base font-semibold">{r.name}</div>
+              <div className="text-sm text-white/65 mt-1">
+                provider: {r.provider} • min role: {r.min_role}
+              </div>
+              <div className="mt-4">
+                <span className="pill pillPrimary">Enter</span>
+              </div>
+            </a>
+          ))}
         </div>
       </div>
+
+      <style>{`
+        .pill {
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.06);
+          border-radius: 999px;
+          height: 42px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform .12s ease, border-color .12s ease, background .12s ease;
+        }
+        .pill:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); }
+        .pillPrimary { background:#fff; color:#000; border:none; }
+        .card {
+          background: rgba(255,255,255,0.035);
+          border: 1px solid rgba(255,255,255,0.10);
+          border-radius: 24px;
+          padding: 18px;
+          text-decoration: none;
+          color: white;
+        }
+      `}</style>
     </div>
   );
 }
