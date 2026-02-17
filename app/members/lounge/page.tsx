@@ -1,7 +1,6 @@
 import Link from "next/link";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
-import { mockRooms } from "@/lib/mock";
 
 export default function LoungePage() {
   const rooms = mockRooms();
