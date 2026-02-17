@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { getMyRole } from "@/lib/store";
 
 export type Role = "member" | "admin" | "superadmin";
 
