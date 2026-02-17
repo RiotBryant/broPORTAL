@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { brobotAnswer } from "@/lib/mock";
+import { brobotAnswer } from "@/lib/store";
 import Link from "next/link";
 
 export default function BroBotUI() {
