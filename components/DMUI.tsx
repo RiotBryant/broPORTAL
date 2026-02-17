@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { store } from "@/lib/store";
-import { mockMe, mockDirectory } from "@/lib/mock";
+import { getMyRole } from "@/lib/store";
 
 export default function DMUI({ threadId }: { threadId?: string }) {
   const me = mockMe();
