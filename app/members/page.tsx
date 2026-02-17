@@ -17,10 +17,8 @@ export default function MembersHome() {
     let alive = true;
 
     async function loadUserRole() {
-      const { data: authData, error: authErr } =
-        await supabase.auth.getUser();
-
-      const user = authData?.user;
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+const user = authData?.user; // ✅ after this change it will be real
 
       if (authErr || !user) {
         window.location.href = "/login";
