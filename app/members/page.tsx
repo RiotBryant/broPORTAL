@@ -17,30 +17,31 @@ export default function MembersHome() {
     let alive = true;
 
     async function loadUserRole() {
-      const { data, error } = await supabase.auth.getUser();
-const user = data?.user;
+  const { data: authRes, error: authErr } = await supabase.auth.getUser();
+  const user = authRes?.user;
 
-if (error || !user) {
-  window.location.href = "/login";
-  return;
+  if (authErr || !user) {
+    window.location.href = "/login";
+    return;
+  }
+
+  const { data: roleRes, error: roleErr } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!alive) return;
+
+  if (roleErr) {
+    console.error(roleErr);
+    setRole("member");
+  } else {
+    setRole((roleRes?.role as Role) ?? "member");
+  }
+
+  setLoading(false);
 }
-
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!alive) return;
-
-      if (error || !data) {
-        setRole("member");
-      } else {
-        setRole((data.role as Role) ?? "member");
-      }
-
-      setLoading(false);
-    }
 
     loadUserRole();
 
