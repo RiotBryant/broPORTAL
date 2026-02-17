@@ -74,6 +74,9 @@ export default function MembersHome() {
             <Link className="pill" href="/members/profile">
               Profile
             </Link>
+{isAdmin ? (
+  <Link className="pill" href="/members/admin/events">Events</Link>
+) : null}
 
             <Link
               className="pill"
