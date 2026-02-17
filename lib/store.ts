@@ -2,6 +2,11 @@ import { supabase } from "@/lib/supabase/client";
 
 export type Role = "member" | "admin" | "superadmin";
 
+export type NextEvent = {
+  title: string;
+  starts_at: string; // ISO string
+};
+
 export function isAdminRole(role: Role) {
   return role === "admin" || role === "superadmin";
 }
@@ -27,10 +32,12 @@ export async function getMyRole(): Promise<Role> {
     return "member";
   }
 
-  const r = (data?.role ?? "member") as Role;
-  return r;
+  return (data?.role as Role) ?? "member";
 }
-export type NextEvent = {
-  title: string;
-  starts_at: string; // ISO string
+
+// Backwards-compatible wrapper for older components
+export const store = {
+  requireUser,
+  getMyRole,
+  isAdminRole,
 };
