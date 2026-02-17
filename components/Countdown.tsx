@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { mockNextEvent } from "@/lib/mock";
+import { NextEvent } from "@/lib/store";
 
 export default function Countdown() {
   const evt = useMemo(() => mockNextEvent(), []);
