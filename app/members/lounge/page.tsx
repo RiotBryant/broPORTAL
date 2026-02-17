@@ -1,94 +1,86 @@
+"use client";
+
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import { getMyRole, isAdminRole } from "@/lib/store";
 
 type Room = {
-  id: string;
-  name: string;
-  description: string | null;
-  is_active: boolean;
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  is_admin_only: boolean;
 };
 
-export default async function LoungePage() {
-  const supabase = createClient();
+export default function LoungePage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const { data, error } = await supabase
-    .from("rooms")
-    .select("id,name,description,is_active")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        router.replace(`/login?next=${encodeURIComponent("/members/lounge")}`);
+        return;
+      }
 
-  const rooms = (data ?? []) as Room[];
+      const role = await getMyRole().catch(() => "member");
+      setIsAdmin(isAdminRole(role));
+
+      const { data: rows } = await supabase
+        .from("rooms")
+        .select("slug,title,subtitle,is_admin_only")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true });
+
+      setRooms((rows ?? []) as Room[]);
+      setLoading(false);
+    })();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white grid place-items-center">
+        <div className="opacity-70 text-sm">Loading…</div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 22, maxWidth: 980, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>
-            Lounge
-          </h1>
-          <div style={{ opacity: 0.7, marginTop: 6 }}>
-            Live rooms + conversations
+    <div className="min-h-screen bg-black text-white">
+      <div className="wrap" style={{ width: "min(980px, calc(100% - 24px))", margin: "0 auto", padding: "24px 0 36px" }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold">broT Lounge</div>
+            <div className="text-sm text-white/60">Choose a room. Nothing auto-joins.</div>
+          </div>
+
+          <div className="flex gap-2">
+            <Link href="/members" className="btn">← Back</Link>
           </div>
         </div>
 
-        <Link href="/members" style={pill()}>
-          ← Back
-        </Link>
-      </div>
-
-      <div style={{ marginTop: 18 }}>
-        {error ? (
-          <div style={card()}>
-            Error loading rooms: {error.message}
-          </div>
-        ) : rooms.length === 0 ? (
-          <div style={card()}>
-            No rooms yet.
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {rooms.map((room) => (
-              <div key={room.id} style={card()}>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>
-                  {room.name}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {rooms
+            .filter((r) => !r.is_admin_only || isAdmin)
+            .map((r) => (
+              <Link
+                key={r.slug}
+                href={`/members/room/${r.slug}`}
+                className="card hover:opacity-95 transition"
+              >
+                <div className="text-base font-semibold">{r.title}</div>
+                <div className="text-sm text-white/65 mt-1">{r.subtitle}</div>
+                <div className="mt-4">
+                  <span className="btn btnPrimary">Enter</span>
                 </div>
-                <div style={{ opacity: 0.7, marginTop: 6 }}>
-                  {room.description ?? ""}
-                </div>
-
-                <Link
-                  href={`/members/lounge/${room.id}`}
-                  style={{ ...pill(), marginTop: 10, display: "inline-flex" }}
-                >
-                  Enter Room
-                </Link>
-              </div>
+              </Link>
             ))}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
-}
-
-function pill(): React.CSSProperties {
-  return {
-    padding: "8px 14px",
-    borderRadius: 999,
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(255,255,255,0.06)",
-    color: "white",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 700,
-  };
-}
-
-function card(): React.CSSProperties {
-  return {
-    padding: 16,
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "rgba(0,0,0,0.28)",
-  };
 }
