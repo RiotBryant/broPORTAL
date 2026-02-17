@@ -27,7 +27,11 @@ export default function LoungePage() {
         return;
       }
 
-      const role = await getMyRole().catch(() => "member");
+     import type { Role } from "@/lib/store";
+
+const role: Role = await getMyRole().catch(() => "member" as Role);
+setIsAdmin(isAdminRole(role));
+
       setIsAdmin(isAdminRole(role));
 
       const { data: rows } = await supabase
