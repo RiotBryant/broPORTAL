@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NextEvent } from "@/lib/store";
 
 export default function Countdown() {
-  const evt = useMemo(() => mockNextEvent(), []);
+  const evt = useMemo(() => NextEvent(), []);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
