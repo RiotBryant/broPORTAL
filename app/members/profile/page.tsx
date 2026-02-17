@@ -568,6 +568,8 @@ export default function ProfilePage() {
             >
               {saving ? "Saving…" : "Save"}
             </button>
+            
+{uid ? <ProfileBadges userId={uid} /> : null}
 
             {msg ? <div className="tiny">{msg}</div> : null}
           </div>
