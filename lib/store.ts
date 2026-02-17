@@ -1,7 +1,10 @@
 import { supabase } from "@/lib/supabase/client";
-import { getMyRole } from "@/lib/store";
 
 export type Role = "member" | "admin" | "superadmin";
+
+export function isAdminRole(role: Role) {
+  return role === "admin" || role === "superadmin";
+}
 
 export async function requireUser() {
   const { data, error } = await supabase.auth.getUser();
@@ -12,15 +15,18 @@ export async function requireUser() {
 
 export async function getMyRole(): Promise<Role> {
   const user = await requireUser();
-  const { data } = await supabase
+
+  const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  return (data?.role as Role) ?? "member";
-}
+  if (error) {
+    console.error(error);
+    return "member";
+  }
 
-export function isAdminRole(role: Role) {
-  return role === "admin" || role === "superadmin";
+  const r = (data?.role ?? "member") as Role;
+  return r;
 }
