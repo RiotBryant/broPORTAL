@@ -1,135 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-
-
-type RoomRow = {
-  id: string;
-  name: string;
-  provider: "meet" | "jaas8x8";
-  url: string;
-  min_role: Role;
-  logo_url: string | null;
-};
-
-const ROLE_RANK: Record<Role, number> = {
-  member: 0,
-  admin: 1,
-  superadmin: 2,
-};
-
-function canSee(userRole: Role, minRole: Role) {
-  return ROLE_RANK[userRole] >= ROLE_RANK[minRole];
-}
+import { ROOM_ORDER, ROOMS, type RoomSlug } from "@/lib/rooms";
 
 export default function LoungePage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<Role>("member");
-  const [rooms, setRooms] = useState<RoomRow[]>([]);
-
-  const isAdmin = useMemo(() => isAdminRole(role), [role]);
-
-  useEffect(() => {
-    (async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) {
-        router.replace(`/login?next=${encodeURIComponent("/members/lounge")}`);
-        return;
-      }
-
-      const r: Role = await getMyRole().catch(() => "member" as Role);
-      setRole(r);
-
-      const { data, error } = await supabase
-        .from("rooms")
-        .select("id,name,provider,url,min_role,logo_url")
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        console.error(error);
-        setRooms([]);
-      } else {
-        const all = (data ?? []) as RoomRow[];
-        setRooms(all.filter((rm) => canSee(r, rm.min_role)));
-      }
-
-      setLoading(false);
-    })();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black text-white grid place-items-center">
-        <div className="opacity-70 text-sm">Loading…</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        <div className="flex items-center justify-between gap-3">
+    <div className="min-h-screen bg-[#07070b] text-white">
+      <div className="mx-auto max-w-5xl px-5 py-10">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold">broT Lounge</div>
-            <div className="text-sm text-white/60">
-              Choose a room. Min role enforced. Your role: <b>{role}</b>
-            </div>
+            <h1 className="text-2xl font-semibold tracking-tight">broLOUNGE</h1>
+            <p className="mt-2 text-sm text-white/70">Choose a room.</p>
           </div>
-
-          <div className="flex gap-2">
-            <Link href="/members" className="pill">← Back</Link>
-            {isAdmin ? <Link href="/members/admin/events" className="pill pillPrimary">Admin Events</Link> : null}
-          </div>
+          <Link href="/members" className="text-sm text-white/70 hover:text-white">
+            ← Back to Portal
+          </Link>
         </div>
 
-        <div style={{ marginTop: 18 }} className="grid gap-3 sm:grid-cols-2">
-          {rooms.map((r) => (
-            <a
-              key={r.id}
-              href={r.url}
-              target="_blank"
-              rel="noreferrer"
-              className="card hover:opacity-95 transition"
+        <div className="mt-6 grid gap-3">
+          {ROOM_ORDER.map((slug: RoomSlug) => (
+            <Link
+              key={slug}
+              href={`/members/room/${slug}`}
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 hover:bg-white/10"
             >
-              <div className="text-base font-semibold">{r.name}</div>
-              <div className="text-sm text-white/65 mt-1">
-                provider: {r.provider} • min role: {r.min_role}
-              </div>
-              <div className="mt-4">
-                <span className="pill pillPrimary">Enter</span>
-              </div>
-            </a>
+              <div className="text-lg font-semibold">{ROOMS[slug].title}</div>
+              <div className="mt-1 text-xs text-white/60">{slug}</div>
+            </Link>
           ))}
         </div>
       </div>
-
-      <style>{`
-        .pill {
-          border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.06);
-          border-radius: 999px;
-          height: 42px;
-          padding: 0 14px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          transition: transform .12s ease, border-color .12s ease, background .12s ease;
-        }
-        .pill:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); }
-        .pillPrimary { background:#fff; color:#000; border:none; }
-        .card {
-          background: rgba(255,255,255,0.035);
-          border: 1px solid rgba(255,255,255,0.10);
-          border-radius: 24px;
-          padding: 18px;
-          text-decoration: none;
-          color: white;
-        }
-      `}</style>
     </div>
   );
 }
