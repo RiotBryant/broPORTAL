@@ -1,45 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
-type CookieToSet = { name: string; value: string; options?: any };
+// Skeleton mode: no Supabase yet.
+// This middleware enforces ONE portal URL shape and a simple password gate cookie.
+// Later, we’ll swap this to Supabase cookies, but the routing stays.
 
-export async function middleware(req: NextRequest) {
-  let res = NextResponse.next();
+const PORTAL_PREFIX = "/members";
+const LEGACY_PREFIXES = ["/portal", "/profile", "/lounge"];
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll(cookies: CookieToSet[]) {
-          cookies.forEach((c) => res.cookies.set(c.name, c.value, c.options));
-        }
-      }
-    }
-  );
-
+export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  const isMembers = path === "/members" || path.startsWith("/members/");
 
-  if (!isMembers) return res;
-
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // Force legacy entrypoints into the one portal
+  if (LEGACY_PREFIXES.some((p) => path === p || path.startsWith(p + "/"))) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", path);
+    url.pathname = PORTAL_PREFIX;
     return NextResponse.redirect(url);
   }
 
-  return res;
+  // Protect members routes with a simple cookie gate for now:
+  // If cookie "brot_gate" is not set, redirect to /login
+  if (path === PORTAL_PREFIX || path.startsWith(PORTAL_PREFIX + "/")) {
+    const gate = req.cookies.get("brot_gate")?.value;
+    if (!gate) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirect", path);
+      return NextResponse.redirect(url);
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/members/:path*"]
+  matcher: ["/members/:path*", "/portal/:path*", "/profile/:path*", "/lounge/:path*"]
 };
