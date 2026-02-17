@@ -1,323 +1,604 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { getMyRole, isAdminRole, type Role } from "@/lib/store";
+import React, { useEffect, useMemo, useState } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-type CalEvent = {
+type CalendarEvent = {
   id: string;
+  user_id: string;
   title: string;
-  starts_at: string; // timestamptz
   description: string | null;
-  flyer_url: string | null;
+  start_time: string; // ISO
+  end_time: string; // ISO
+  all_day: boolean;
   created_at: string;
 };
 
-function toLocalDatetimeValue(date: Date) {
-  // for <input type="datetime-local">
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
+type EventForm = {
+  id?: string;
+  title: string;
+  description: string;
+  date: string; // YYYY-MM-DD (local)
+  start: string; // HH:MM
+  end: string; // HH:MM
+  allDay: boolean;
+};
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+function addMonths(d: Date, delta: number) {
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1);
+}
+
+function startOfWeekSunday(d: Date) {
+  const dd = new Date(d);
+  dd.setHours(0, 0, 0, 0);
+  dd.setDate(dd.getDate() - dd.getDay());
+  return dd;
+}
+
+function endOfWeekSaturday(d: Date) {
+  const dd = new Date(d);
+  dd.setHours(23, 59, 59, 999);
+  dd.setDate(dd.getDate() + (6 - dd.getDay()));
+  return dd;
+}
+
+/**
+ * Create a local datetime from YYYY-MM-DD + HH:MM, then return ISO string.
+ * NOTE: This stores an absolute moment (timestamptz), based on the user's local time.
+ */
+function localDateTimeToISO(dateYMD: string, timeHM: string) {
+  const [y, m, day] = dateYMD.split("-").map(Number);
+  const [hh, mm] = timeHM.split(":").map(Number);
+  const dt = new Date(y, m - 1, day, hh, mm, 0, 0);
+  return dt.toISOString();
+}
+
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatMonthTitle(d: Date) {
+  return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+}
+
+function formatTimeRange(ev: CalendarEvent) {
+  const start = new Date(ev.start_time);
+  const end = new Date(ev.end_time);
+
+  if (ev.all_day) return "All day";
+
+  const s = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const e = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return `${s}–${e}`;
+}
+
+function classNames(...xs: Array<string | false | undefined | null>) {
+  return xs.filter(Boolean).join(" ");
 }
 
 export default function CalendarUI() {
-  const [role, setRole] = useState<Role>("member");
-  const isAdmin = useMemo(() => isAdminRole(role), [role]);
+  const supabase = useMemo(() => createClientComponentClient(), []);
+
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(1);
+    return d;
+  });
 
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<CalEvent[]>([]);
-  const [msg, setMsg] = useState("");
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Create form
-  const [title, setTitle] = useState("Weekly Meeting");
-  const [startsAt, setStartsAt] = useState(toLocalDatetimeValue(new Date(Date.now() + 86400000)));
-  const [description, setDescription] = useState("");
-  const [flyerUrl, setFlyerUrl] = useState("");
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
-  // Edit state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editStartsAt, setEditStartsAt] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editFlyerUrl, setEditFlyerUrl] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EventForm>({
+    title: "",
+    description: "",
+    date: toYMD(new Date()),
+    start: "09:00",
+    end: "10:00",
+    allDay: false,
+  });
 
-  async function refresh() {
-    setLoading(true);
-    setMsg("");
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
-    const r = await getMyRole().catch(() => "member" as Role);
-    setRole(r);
+  const visibleRange = useMemo(() => {
+    const mStart = startOfMonth(monthCursor);
+    const mEnd = endOfMonth(monthCursor);
+    const rangeStart = startOfWeekSunday(mStart);
+    const rangeEnd = endOfWeekSaturday(mEnd);
+    return { rangeStart, rangeEnd };
+  }, [monthCursor]);
 
-    const { data, error } = await supabase
-      .from("calendar_events")
-      .select("id,title,starts_at,description,flyer_url,created_at")
-      .order("starts_at", { ascending: true });
-
-    if (error) {
-      console.error(error);
-      setMsg(error.message);
-      setEvents([]);
-      setLoading(false);
-      return;
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const ev of events) {
+      const d = new Date(ev.start_time);
+      const key = toYMD(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+      const arr = map.get(key) ?? [];
+      arr.push(ev);
+      map.set(key, arr);
     }
+    // sort each day by start time
+    for (const [k, arr] of map.entries()) {
+      arr.sort((a, b) => +new Date(a.start_time) - +new Date(b.start_time));
+      map.set(k, arr);
+    }
+    return map;
+  }, [events]);
 
-    setEvents((data ?? []) as CalEvent[]);
-    setLoading(false);
+  const gridDays = useMemo(() => {
+    const days: Date[] = [];
+    const { rangeStart, rangeEnd } = visibleRange;
+
+    const cur = new Date(rangeStart);
+    cur.setHours(0, 0, 0, 0);
+
+    while (cur <= rangeEnd) {
+      days.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+  }, [visibleRange]);
+
+  async function loadUserAndEvents() {
+    setLoading(true);
+    setError(null);
+    try {
+      const {
+        data: { user },
+        error: authErr,
+      } = await supabase.auth.getUser();
+
+      if (authErr) throw authErr;
+      if (!user) {
+        setAuthUserId(null);
+        setEvents([]);
+        setLoading(false);
+        return;
+      }
+      setAuthUserId(user.id);
+
+      const { rangeStart, rangeEnd } = visibleRange;
+
+      // Fetch events that overlap the visible range:
+      // start_time <= rangeEnd AND end_time >= rangeStart
+      const { data, error: evErr } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .lte("start_time", rangeEnd.toISOString())
+        .gte("end_time", rangeStart.toISOString())
+        .order("start_time", { ascending: true });
+
+      if (evErr) throw evErr;
+
+      setEvents((data ?? []) as CalendarEvent[]);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load calendar events.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    refresh().catch((e) => {
-      console.error(e);
-      setLoading(false);
-      setMsg("Failed to load calendar.");
-    });
+    loadUserAndEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthCursor]);
+
+  // Optional: live updates (insert/update/delete) for the visible range
+  useEffect(() => {
+    if (!authUserId) return;
+
+    const channel = supabase
+      .channel("calendar_events_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "calendar_events" },
+        () => {
+          // keep it simple: refetch when any change occurs
+          loadUserAndEvents();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUserId, visibleRange.rangeStart.toISOString(), visibleRange.rangeEnd.toISOString()]);
+
+  function openCreate(day: Date) {
+    const ymd = toYMD(day);
+    setSelectedDay(day);
+    setForm({
+      title: "",
+      description: "",
+      date: ymd,
+      start: "09:00",
+      end: "10:00",
+      allDay: false,
+    });
+    setModalOpen(true);
+  }
+
+  function openEdit(ev: CalendarEvent) {
+    const start = new Date(ev.start_time);
+    const end = new Date(ev.end_time);
+
+    const date = toYMD(new Date(start.getFullYear(), start.getMonth(), start.getDate()));
+    const startHM = `${pad2(start.getHours())}:${pad2(start.getMinutes())}`;
+    const endHM = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+
+    setSelectedDay(start);
+    setForm({
+      id: ev.id,
+      title: ev.title,
+      description: ev.description ?? "",
+      date,
+      start: startHM,
+      end: endHM,
+      allDay: ev.all_day,
+    });
+    setModalOpen(true);
+  }
+
+  async function saveEvent() {
+    if (!authUserId) {
+      setError("You must be signed in to create events.");
+      return;
+    }
+
+    const title = form.title.trim();
+    if (!title) {
+      setError("Title is required.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      let startISO = localDateTimeToISO(form.date, form.start);
+      let endISO = localDateTimeToISO(form.date, form.end);
+
+      if (form.allDay) {
+        // Store as midnight-to-23:59 of that day (local) -> absolute ISO
+        startISO = localDateTimeToISO(form.date, "00:00");
+        endISO = localDateTimeToISO(form.date, "23:59");
+      } else {
+        // basic validation: end must be after start
+        if (+new Date(endISO) <= +new Date(startISO)) {
+          setError("End time must be after start time.");
+          setSaving(false);
+          return;
+        }
+      }
+
+      const payload = {
+        title,
+        description: form.description.trim() ? form.description.trim() : null,
+        start_time: startISO,
+        end_time: endISO,
+        all_day: form.allDay,
+      };
+
+      if (form.id) {
+        const { error: upErr } = await supabase
+          .from("calendar_events")
+          .update(payload)
+          .eq("id", form.id);
+
+        if (upErr) throw upErr;
+      } else {
+        const { error: insErr } = await supabase.from("calendar_events").insert(payload);
+        if (insErr) throw insErr;
+      }
+
+      setModalOpen(false);
+      await loadUserAndEvents();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to save event.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteEvent() {
+    if (!form.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { error: delErr } = await supabase.from("calendar_events").delete().eq("id", form.id);
+      if (delErr) throw delErr;
+
+      setModalOpen(false);
+      await loadUserAndEvents();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to delete event.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   }, []);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, CalEvent[]>();
-    for (const e of events) {
-      const d = new Date(e.starts_at);
-      const key = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "2-digit", year: "numeric" });
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(e);
-    }
-    return Array.from(map.entries());
-  }, [events]);
-
-  async function createEvent() {
-    if (!isAdmin) return;
-
-    const t = title.trim();
-    if (!t) return setMsg("Title is required.");
-
-    if (!startsAt) return setMsg("Date/time is required.");
-
-    // datetime-local is local; convert to ISO
-    const iso = new Date(startsAt).toISOString();
-
-    const { data: auth } = await supabase.auth.getUser();
-    const userId = auth.user?.id;
-    if (!userId) return setMsg("Not logged in.");
-
-    const { error } = await supabase.from("calendar_events").insert({
-      title: t,
-      starts_at: iso,
-      description: description.trim() || null,
-      flyer_url: flyerUrl.trim() || null,
-      created_by: userId,
-    });
-
-    if (error) {
-      console.error(error);
-      setMsg(error.message);
-      return;
-    }
-
-    setDescription("");
-    setFlyerUrl("");
-    setMsg("Event created.");
-    await refresh();
-  }
-
-  function startEdit(e: CalEvent) {
-    setEditingId(e.id);
-    setEditTitle(e.title);
-    setEditStartsAt(toLocalDatetimeValue(new Date(e.starts_at)));
-    setEditDescription(e.description ?? "");
-    setEditFlyerUrl(e.flyer_url ?? "");
-    setMsg("");
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setMsg("");
-  }
-
-  async function saveEdit() {
-    if (!isAdmin || !editingId) return;
-
-    const t = editTitle.trim();
-    if (!t) return setMsg("Title is required.");
-    if (!editStartsAt) return setMsg("Date/time is required.");
-
-    const iso = new Date(editStartsAt).toISOString();
-
-    const { error } = await supabase
-      .from("calendar_events")
-      .update({
-        title: t,
-        starts_at: iso,
-        description: editDescription.trim() || null,
-        flyer_url: editFlyerUrl.trim() || null,
-      })
-      .eq("id", editingId);
-
-    if (error) {
-      console.error(error);
-      setMsg(error.message);
-      return;
-    }
-
-    setEditingId(null);
-    setMsg("Saved.");
-    await refresh();
-  }
-
-  async function deleteEvent(id: string) {
-    if (!isAdmin) return;
-    if (!confirm("Delete this event?")) return;
-
-    const { error } = await supabase.from("calendar_events").delete().eq("id", id);
-    if (error) {
-      console.error(error);
-      setMsg(error.message);
-      return;
-    }
-
-    setMsg("Deleted.");
-    await refresh();
-  }
+  const weekDayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div className="grid">
-      {isAdmin ? (
-        <div className="card">
-          <div className="cardTitle">Admin: Add Calendar Event</div>
-          <div className="cardDesc">Create events directly from the portal.</div>
-
-          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
-            <input
-              className="input"
-              type="datetime-local"
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-            />
-            <textarea
-              className="input"
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description (textbox)"
-            />
-            <input
-              className="input"
-              value={flyerUrl}
-              onChange={(e) => setFlyerUrl(e.target.value)}
-              placeholder="Flyer link (optional) — paste a URL"
-            />
-            <button className="btn btnPrimary" onClick={createEvent}>
-              Add Event
-            </button>
-            {msg ? <div style={{ fontSize: 12, opacity: 0.7 }}>{msg}</div> : null}
-          </div>
+    <div className="w-full">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <button
+            className="px-3 py-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 active:scale-[0.99]"
+            onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+            aria-label="Previous month"
+          >
+            ←
+          </button>
+          <button
+            className="px-3 py-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 active:scale-[0.99]"
+            onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+            aria-label="Next month"
+          >
+            →
+          </button>
+          <button
+            className="px-3 py-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 active:scale-[0.99]"
+            onClick={() => {
+              const d = new Date();
+              d.setHours(0, 0, 0, 0);
+              d.setDate(1);
+              setMonthCursor(d);
+            }}
+          >
+            Today
+          </button>
         </div>
-      ) : null}
 
-      <div className="card">
-        <div className="cardTitle">Calendar</div>
-        <div className="cardDesc">{loading ? "Loading…" : "Upcoming events and dates."}</div>
+        <div className="text-lg font-semibold">{formatMonthTitle(monthCursor)}</div>
 
-        {msg && !isAdmin ? <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>{msg}</div> : null}
+        <div className="text-sm text-neutral-500">
+          {authUserId ? "Signed in" : "Sign in to create events"}
+        </div>
+      </div>
 
-        <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-          {grouped.length === 0 && !loading ? (
-            <div style={{ padding: "10px 0", opacity: 0.7 }}>No events yet.</div>
-          ) : null}
+      {/* Error / Loading */}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {loading && (
+        <div className="mb-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+          Loading…
+        </div>
+      )}
 
-          {grouped.map(([day, rows]) => (
-            <div key={day} style={{ padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              <div style={{ fontWeight: 900, marginBottom: 8 }}>{day}</div>
-
-              <div style={{ display: "grid", gap: 10 }}>
-                {rows.map((e) => {
-                  const time = new Date(e.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-                  const isEditing = editingId === e.id;
-
-                  return (
-                    <div key={e.id} style={{ padding: 12, border: "1px solid rgba(255,255,255,0.10)", borderRadius: 16 }}>
-                      {!isEditing ? (
-                        <>
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                            <div>
-                              <div style={{ fontWeight: 900 }}>
-                                {time} • {e.title}
-                              </div>
-                              {e.description ? (
-                                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6, whiteSpace: "pre-wrap" }}>
-                                  {e.description}
-                                </div>
-                              ) : null}
-                              {e.flyer_url ? (
-                                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8 }}>
-                                  <a href={e.flyer_url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
-                                    View Flyer
-                                  </a>
-                                </div>
-                              ) : null}
-                            </div>
-
-                            {isAdmin ? (
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                                <button className="btn btnGhost" onClick={() => startEdit(e)}>
-                                  Edit
-                                </button>
-                                <button className="btn btnGhost" onClick={() => deleteEvent(e.id)}>
-                                  Delete
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontWeight: 900, marginBottom: 8 }}>Edit Event</div>
-                          <div style={{ display: "grid", gap: 10 }}>
-                            <input className="input" value={editTitle} onChange={(ev) => setEditTitle(ev.target.value)} />
-                            <input
-                              className="input"
-                              type="datetime-local"
-                              value={editStartsAt}
-                              onChange={(ev) => setEditStartsAt(ev.target.value)}
-                            />
-                            <textarea
-                              className="input"
-                              rows={4}
-                              value={editDescription}
-                              onChange={(ev) => setEditDescription(ev.target.value)}
-                              placeholder="Description"
-                            />
-                            <input
-                              className="input"
-                              value={editFlyerUrl}
-                              onChange={(ev) => setEditFlyerUrl(ev.target.value)}
-                              placeholder="Flyer link (optional)"
-                            />
-
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn btnPrimary" onClick={saveEdit}>
-                                Save
-                              </button>
-                              <button className="btn btnGhost" onClick={cancelEdit}>
-                                Cancel
-                              </button>
-                            </div>
-
-                            {msg ? <div style={{ fontSize: 12, opacity: 0.7 }}>{msg}</div> : null}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+      {/* Calendar grid */}
+      <div className="rounded-2xl border border-neutral-200 overflow-hidden">
+        {/* Weekday header */}
+        <div className="grid grid-cols-7 bg-neutral-50 border-b border-neutral-200">
+          {weekDayLabels.map((w) => (
+            <div key={w} className="px-3 py-2 text-xs font-semibold text-neutral-600">
+              {w}
             </div>
           ))}
         </div>
+
+        {/* Days */}
+        <div className="grid grid-cols-7">
+          {gridDays.map((day) => {
+            const inMonth = day.getMonth() === monthCursor.getMonth();
+            const isToday = isSameDay(day, today);
+            const key = toYMD(day);
+            const dayEvents = eventsByDay.get(key) ?? [];
+
+            return (
+              <div
+                key={key}
+                className={classNames(
+                  "min-h-[120px] border-b border-neutral-200 border-r border-neutral-200 last:border-r-0",
+                  !inMonth && "bg-neutral-50/60"
+                )}
+              >
+                <div className="flex items-center justify-between px-2 pt-2">
+                  <div
+                    className={classNames(
+                      "text-xs font-semibold px-2 py-1 rounded-lg",
+                      isToday ? "bg-black text-white" : "text-neutral-700"
+                    )}
+                  >
+                    {day.getDate()}
+                  </div>
+                  <button
+                    className="text-xs px-2 py-1 rounded-lg border border-neutral-200 hover:bg-neutral-50 active:scale-[0.99]"
+                    onClick={() => openCreate(day)}
+                    title="Add event"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <div className="px-2 pb-2 mt-2 space-y-1">
+                  {dayEvents.slice(0, 4).map((ev) => (
+                    <button
+                      key={ev.id}
+                      className="w-full text-left rounded-lg border border-neutral-200 hover:bg-neutral-50 px-2 py-1"
+                      onClick={() => openEdit(ev)}
+                      title="Edit event"
+                    >
+                      <div className="text-xs font-semibold truncate">{ev.title}</div>
+                      <div className="text-[11px] text-neutral-600 truncate">
+                        {formatTimeRange(ev)}
+                      </div>
+                    </button>
+                  ))}
+                  {dayEvents.length > 4 && (
+                    <div className="text-[11px] text-neutral-500 px-1">
+                      +{dayEvents.length - 4} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Modal */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onMouseDown={(e) => {
+            // click outside to close
+            if (e.target === e.currentTarget) setModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-neutral-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+              <div className="font-semibold">
+                {form.id ? "Edit event" : "New event"}{" "}
+                <span className="text-sm font-normal text-neutral-500">
+                  {selectedDay ? toYMD(selectedDay) : form.date}
+                </span>
+              </div>
+              <button
+                className="px-2 py-1 rounded-lg hover:bg-neutral-100"
+                onClick={() => setModalOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-4 py-4 space-y-3">
+              <div className="grid grid-cols-1 gap-2">
+                <label className="text-xs font-semibold text-neutral-700">Title</label>
+                <input
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="Meeting / appointment / reminder"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <label className="text-xs font-semibold text-neutral-700">Description</label>
+                <textarea
+                  className="w-full min-h-[90px] rounded-xl border border-neutral-200 px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional notes"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2">
+                  <label className="text-xs font-semibold text-neutral-700">Date</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
+                    value={form.date}
+                    onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                  />
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <label className="flex items-center gap-2 text-sm text-neutral-700 select-none">
+                    <input
+                      type="checkbox"
+                      checked={form.allDay}
+                      onChange={(e) => setForm((f) => ({ ...f, allDay: e.target.checked }))}
+                    />
+                    All day
+                  </label>
+                </div>
+              </div>
+
+              {!form.allDay && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs font-semibold text-neutral-700">Start</label>
+                    <input
+                      type="time"
+                      className="w-full rounded-xl border border-neutral-200 px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
+                      value={form.start}
+                      onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="text-xs font-semibold text-neutral-700">End</label>
+                    <input
+                      type="time"
+                      className="w-full rounded-xl border border-neutral-200 px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
+                      value={form.end}
+                      onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-neutral-200">
+              <div className="flex items-center gap-2">
+                {form.id && (
+                  <button
+                    className="px-3 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    onClick={deleteEvent}
+                    disabled={saving}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-3 py-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 disabled:opacity-50"
+                  onClick={() => setModalOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-3 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
+                  onClick={saveEvent}
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
