@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMyRole, type Role } from "@/lib/store";
 
-type Role = "member" | "admin" | "superadmin";
+const r: Role = await getMyRole().catch(() => "member" as Role);
 
 type RoomRow = {
   id: string;
