@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { getMyRole, type Role } from "@/lib/store";
 
 const r: Role = await getMyRole().catch(() => "member" as Role);
+setRole(r);
 
 type RoomRow = {
   id: string;
