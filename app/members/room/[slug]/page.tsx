@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { getMyRole } from "@/lib/store";
+import { getMyRole, type Role } from "@/lib/store";
 
 type Role = "member" | "admin" | "superadmin";
 
