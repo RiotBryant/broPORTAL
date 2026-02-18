@@ -1,8 +1,29 @@
-"use client";
+import { createClient } from "@/lib/supabase/client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-import { getMyRole } from "@/lib/store";
+export type Role = "new" | "member" | "admin" | "superadmin" | "god";
+
+export function isAdminRole(role: Role) {
+  return role === "admin" || role === "superadmin" || role === "god";
+}
+
+export const rank = (r: Role) =>
+  r === "new" ? 0 : r === "member" ? 1 : r === "admin" ? 2 : r === "superadmin" ? 3 : 4;
+
+export async function getMyRole(): Promise<Role> {
+  const supabase = createClient();
+
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return "new";
+
+  const { data: roleRow } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  return (roleRow?.role ?? "member") as Role;
+}
 
 type Badge = {
   id: string;
