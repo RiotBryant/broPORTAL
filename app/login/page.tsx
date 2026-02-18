@@ -8,7 +8,8 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const redirectTo = searchParams.get("redirect") || "/members";
+  // ✅ FIX: support both ?next= and ?redirect=
+  const redirectTo = searchParams.get("next") || searchParams.get("redirect") || "/members";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -20,17 +21,25 @@ function LoginInner() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // ✅ FIX: normalize email (prevents dumb auth mismatches)
+    const em = email.trim().toLowerCase();
 
-    setLoading(false);
+    const { error } = await supabase.auth.signInWithPassword({ email: em, password });
 
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
 
-    // Let middleware handle protection; we just send them where they intended to go
+    // ✅ FIX: ensure session/cookie is present before routing
+    await supabase.auth.getSession();
+
+    // ✅ FIX: navigate AND refresh so middleware/server sees auth
     router.replace(redirectTo);
+    router.refresh();
+
+    setLoading(false);
   }
 
   const styles = `
@@ -179,7 +188,6 @@ function LoginInner() {
 }
 
 export default function LoginPage() {
-  // Fixes Next build error: useSearchParams must be inside Suspense
   return (
     <React.Suspense fallback={null}>
       <LoginInner />
