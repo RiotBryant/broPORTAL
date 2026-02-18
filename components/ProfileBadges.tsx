@@ -1,70 +1,82 @@
-import { createClient } from "@/lib/supabase/client";
+"use client";
 
-export type Role = "new" | "member" | "admin" | "superadmin" | "god";
-
-export function isAdminRole(role: Role) {
-  return role === "admin" || role === "superadmin" || role === "god";
-}
-
-export const rank = (r: Role) =>
-  r === "new" ? 0 : r === "member" ? 1 : r === "admin" ? 2 : r === "superadmin" ? 3 : 4;
-
-export async function getMyRole(): Promise<Role> {
-  const supabase = createClient();
-
-  const { data: u } = await supabase.auth.getUser();
-  const uid = u.user?.id;
-  if (!uid) return "new";
-
-  const { data: roleRow } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", uid)
-    .maybeSingle();
-
-  return (roleRow?.role ?? "member") as Role;
-}
+import * as React from "react";
+import { supabase } from "@/lib/supabase/client";
 
 type Badge = {
   id: string;
   name: string;
-  slug: string;
-  icon: string | null;
   description: string | null;
+  icon: string | null;
 };
 
-type AwardRow = {
-  badge_id: Badge | null;
+type Award = {
+  id: string;
+  badge_id: string;
+  user_id: string;
+  created_at: string;
+  revoked_at: string | null;
 };
 
 export default function ProfileBadges({ userId }: { userId: string }) {
-  const [loading, setLoading] = useState(true);
-  const [badges, setBadges] = useState<Badge[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [badges, setBadges] = React.useState<Badge[]>([]);
+  const [err, setErr] = React.useState<string | null>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     let alive = true;
 
     (async () => {
-      setLoading(true);
+      try {
+        setErr(null);
+        setLoading(true);
 
-      const { data, error } = await supabase
-        .from("badge_awards")
-        .select("badge_id(id,name,slug,icon,description)")
-        .eq("user_id", userId)
-        .is("revoked_at", null);
+        // 1) get active awards for this user
+        const { data: awards, error: aErr } = await supabase
+          .from("badge_awards")
+          .select("id,badge_id,user_id,created_at,revoked_at")
+          .eq("user_id", userId)
+          .is("revoked_at", null)
+          .order("created_at", { ascending: false });
 
-      if (!alive) return;
+        if (aErr) throw new Error(aErr.message);
 
-      if (error) {
-        console.error(error);
+        const badgeIds = Array.from(new Set((awards ?? []).map((a: Award) => a.badge_id)));
+        if (!badgeIds.length) {
+          if (!alive) return;
+          setBadges([]);
+          setLoading(false);
+          return;
+        }
+
+        // 2) fetch badge definitions
+        const { data: defs, error: bErr } = await supabase
+          .from("badges")
+          .select("id,name,description,icon")
+          .in("id", badgeIds);
+
+        if (bErr) throw new Error(bErr.message);
+
+        if (!alive) return;
+
+        // Keep ordering similar to awards order
+        const defById = new Map<string, Badge>();
+        (defs ?? []).forEach((b: Badge) => defById.set(b.id, b));
+
+        const ordered: Badge[] = [];
+        for (const id of badgeIds) {
+          const b = defById.get(id);
+          if (b) ordered.push(b);
+        }
+
+        setBadges(ordered);
+        setLoading(false);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load badges.");
         setBadges([]);
-      } else {
-        const rows = (data ?? []) as AwardRow[];
-        const list = rows.map((r) => r.badge_id).filter(Boolean) as Badge[];
-        setBadges(list);
+        setLoading(false);
       }
-
-      setLoading(false);
     })();
 
     return () => {
@@ -72,24 +84,33 @@ export default function ProfileBadges({ userId }: { userId: string }) {
     };
   }, [userId]);
 
-  return (
-    <div className="card" style={{ marginTop: 12 }}>
-      <div className="text-lg font-semibold">Badges</div>
-      <div className="tiny">Earned + awarded.</div>
+  if (loading) {
+    return <div className="text-sm text-white/60">Loading badges…</div>;
+  }
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {loading ? (
-          <div className="chip">Loading…</div>
-        ) : badges.length === 0 ? (
-          <div className="chip">No badges yet</div>
-        ) : (
-          badges.map((b) => (
-            <div key={b.id} className="chip">
-              <b>{b.icon ? `${b.icon} ` : ""}{b.name}</b>
-            </div>
-          ))
-        )}
+  if (err) {
+    return (
+      <div className="text-sm rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-200">
+        {err}
       </div>
+    );
+  }
+
+  if (!badges.length) {
+    return <div className="text-sm text-white/60">No badges yet.</div>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {badges.map((b) => (
+        <div key={b.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold">{b.name}</div>
+            {b.icon ? <div className="text-lg">{b.icon}</div> : null}
+          </div>
+          {b.description ? <div className="mt-1 text-xs text-white/60">{b.description}</div> : null}
+        </div>
+      ))}
     </div>
   );
 }
