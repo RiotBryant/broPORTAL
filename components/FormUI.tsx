@@ -1,16 +1,29 @@
-"use client";
+import { createClient } from "@/lib/supabase/client";
 
-import { useState } from "react";
-import { store } from "@/lib/store";
-import Link from "next/link";
-import { getMyRole } from "@/lib/store";
+export type Role = "new" | "member" | "admin" | "superadmin" | "god";
 
-export default function FormUI({ kind }: { kind: "support" | "access" }) {
-  const role = "member"();
-  const [subject, setSubject] = useState(kind === "access" ? "Request Access" : "");
-  const [category, setCategory] = useState(kind === "access" ? "access" : "support");
-  const [body, setBody] = useState("");
-  const [done, setDone] = useState(false);
+export function isAdminRole(role: Role) {
+  return role === "admin" || role === "superadmin" || role === "god";
+}
+
+export const rank = (r: Role) =>
+  r === "new" ? 0 : r === "member" ? 1 : r === "admin" ? 2 : r === "superadmin" ? 3 : 4;
+
+export async function getMyRole(): Promise<Role> {
+  const supabase = createClient();
+
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return "new";
+
+  const { data: roleRow } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  return (roleRow?.role ?? "member") as Role;
+}
 
   function submit() {
     if (!body.trim()) return;
