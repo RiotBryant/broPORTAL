@@ -6,16 +6,6 @@ import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMyRole, type Role } from "@/lib/store";
 
-const r: Role = await getMyRole().catch(() => "member" as Role);
-setRole(r);
-React.useEffect(() => {
-  (async () => {
-    const r: Role = await getMyRole().catch(() => "member" as Role);
-    setRole(r);
-  })();
-}, []);
-
-
 type RoomRow = {
   id: string;
   slug: string;
@@ -27,9 +17,11 @@ type RoomRow = {
 };
 
 const ROLE_RANK: Record<Role, number> = {
-  member: 0,
-  admin: 1,
-  superadmin: 2,
+  new: 0,
+  member: 1,
+  admin: 2,
+  superadmin: 3,
+  god: 4,
 };
 
 function canSee(userRole: Role, minRole: Role) {
@@ -86,6 +78,7 @@ export default function RoomPage() {
         return;
       }
 
+      // Role
       const r: Role = await getMyRole().catch(() => "member" as Role);
       setRole(r);
 
