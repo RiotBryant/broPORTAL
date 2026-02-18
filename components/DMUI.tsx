@@ -6,56 +6,52 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   dmCreateOrGetThread,
+  dmListDirectory,
   dmListMessages,
   dmListThreads,
-  dmListDirectory,
   dmSendMessage,
-  type DMThreadRow,
+  type ThreadListItem,
 } from "@/app/members/dm/_actions";
 
 type Msg = { id: string; sender_id: string; body: string; created_at: string };
 
-export default function DMUI(props: { initialThreadId?: string | null }) {
+export default function DMUI({ initialThreadId }: { initialThreadId: string | null }) {
   const router = useRouter();
   const supabase = createClient();
 
   const [meId, setMeId] = React.useState<string | null>(null);
-
-  const [threads, setThreads] = React.useState<DMThreadRow[]>([]);
-  const [directory, setDirectory] = React.useState<{ id: string; display_name: string }[]>([]);
-
-  const [active, setActive] = React.useState<string | null>(props.initialThreadId ?? null);
+  const [threads, setThreads] = React.useState<ThreadListItem[]>([]);
+  const [directory, setDirectory] = React.useState<{ user_id: string; display_name: string }[]>([]);
+  const [active, setActive] = React.useState<string | null>(initialThreadId);
   const [items, setItems] = React.useState<Msg[]>([]);
   const [text, setText] = React.useState("");
+  const [err, setErr] = React.useState<string | null>(null);
   const [loadingThreads, setLoadingThreads] = React.useState(true);
   const [loadingMsgs, setLoadingMsgs] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
 
-  async function loadThreads() {
+  async function refreshThreads() {
     setLoadingThreads(true);
     setErr(null);
     try {
       const [t, d] = await Promise.all([dmListThreads(), dmListDirectory()]);
       setThreads(t);
       setDirectory(d);
-
-      // If no active chosen yet, pick first thread
       if (!active && t.length) setActive(t[0].id);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed loading threads.");
+      setErr(e?.message ?? "Failed to load threads.");
     } finally {
       setLoadingThreads(false);
     }
   }
 
-  async function loadMessages(threadId: string) {
+  async function refreshMessages(threadId: string) {
     setLoadingMsgs(true);
     setErr(null);
     try {
-      const data = await dmListMessages(threadId);
-      setItems(data);
+      const msgs = await dmListMessages(threadId);
+      setItems(msgs);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed loading messages.");
+      setErr(e?.message ?? "Failed to load messages.");
     } finally {
       setLoadingMsgs(false);
     }
@@ -65,18 +61,18 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
     (async () => {
       const { data } = await supabase.auth.getUser();
       setMeId(data.user?.id ?? null);
-      await loadThreads();
+      await refreshThreads();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
     if (!active) return;
-    loadMessages(active);
+    refreshMessages(active);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Realtime: listen for new messages in active thread
+  // realtime inserts for active thread
   React.useEffect(() => {
     if (!active) return;
 
@@ -89,7 +85,7 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
           const row = payload.new as any;
           setItems((prev) => {
             if (prev.some((m) => m.id === row.id)) return prev;
-            return [...prev, { id: row.id, sender_id: row.sender_id, body: row.body, created_at: row.created_at }];
+            return [...prev, row];
           });
         }
       )
@@ -100,12 +96,11 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
     };
   }, [active, supabase]);
 
-  async function startThread(otherUserId: string) {
+  async function startDM(otherUserId: string) {
     setErr(null);
     try {
       const tid = await dmCreateOrGetThread(otherUserId);
-      // Refresh threads so it appears in the list with correct name + ordering
-      await loadThreads();
+      await refreshThreads();
       setActive(tid);
       router.push(`/members/dm/${tid}`);
     } catch (e: any) {
@@ -118,14 +113,14 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
     const clean = text.trim();
     if (!clean) return;
 
-    setErr(null);
     setText("");
+    setErr(null);
+
     try {
       await dmSendMessage(active, clean);
-      // realtime will append it; if realtime is slow, you can also force reload
     } catch (e: any) {
       setErr(e?.message ?? "Send failed.");
-      setText(clean); // put it back
+      setText(clean);
     }
   }
 
@@ -135,7 +130,7 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Direct Messages</h1>
-            <p className="mt-2 text-sm text-white/70">Real threads + real messages + realtime inserts.</p>
+            <p className="mt-2 text-sm text-white/70">Threads + messages are live in Supabase.</p>
           </div>
           <Link href="/members" className="text-sm text-white/70 hover:text-white">
             ← Back to Portal
@@ -149,15 +144,11 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
         ) : null}
 
         <div className="mt-6 grid gap-3" style={{ gridTemplateColumns: "1fr 2fr" }}>
-          {/* LEFT: THREADS */}
+          {/* LEFT */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">Threads</div>
-              <button
-                className="text-xs text-white/60 hover:text-white"
-                onClick={loadThreads}
-                disabled={loadingThreads}
-              >
+              <button className="text-xs text-white/60 hover:text-white" onClick={refreshThreads} disabled={loadingThreads}>
                 Refresh
               </button>
             </div>
@@ -174,19 +165,13 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
                       router.push(`/members/dm/${t.id}`);
                     }}
                     className="w-full rounded-full border border-white/10 px-3 py-2 text-left hover:border-white/20"
-                    style={{
-                      background: active === t.id ? "rgba(255,255,255,0.08)" : "transparent",
-                    }}
+                    style={{ background: active === t.id ? "rgba(255,255,255,0.08)" : "transparent" }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-medium">{t.other_display_name}</div>
-                      <div className="text-xs text-white/50">
-                        {t.last_at ? new Date(t.last_at).toLocaleDateString() : ""}
-                      </div>
+                      <div className="text-xs text-white/50">{t.last_at ? new Date(t.last_at).toLocaleDateString() : ""}</div>
                     </div>
-                    <div className="mt-1 text-xs text-white/60 line-clamp-1">
-                      {t.last_body ?? "No messages yet"}
-                    </div>
+                    <div className="mt-1 text-xs text-white/60 line-clamp-1">{t.last_body ?? "No messages yet"}</div>
                   </button>
                 ))}
               </div>
@@ -197,11 +182,11 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
             <div className="mt-5 border-t border-white/10 pt-4">
               <div className="text-xs text-white/60">Start new DM</div>
               <div className="mt-2 grid gap-2">
-                {directory.slice(0, 12).map((p) => (
+                {directory.slice(0, 20).map((p) => (
                   <button
-                    key={p.id}
+                    key={p.user_id}
                     className="w-full rounded-full border border-white/10 px-3 py-2 text-left text-sm hover:border-white/20"
-                    onClick={() => startThread(p.id)}
+                    onClick={() => startDM(p.user_id)}
                   >
                     {p.display_name}
                   </button>
@@ -210,7 +195,7 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
             </div>
           </div>
 
-          {/* RIGHT: MESSAGES */}
+          {/* RIGHT */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="text-sm font-semibold">{active ? "Conversation" : "Select a thread"}</div>
 
@@ -225,9 +210,7 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
                     const mine = meId && m.sender_id === meId;
                     return (
                       <div key={m.id} className={mine ? "text-right" : "text-left"}>
-                        <div className="text-xs text-white/50">
-                          {new Date(m.created_at).toLocaleString()}
-                        </div>
+                        <div className="text-xs text-white/50">{new Date(m.created_at).toLocaleString()}</div>
                         <div
                           className="inline-block max-w-[80%] rounded-2xl px-3 py-2 text-sm"
                           style={{
@@ -267,6 +250,7 @@ export default function DMUI(props: { initialThreadId?: string | null }) {
               >
                 Send
               </button>
+
               <Link className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10" href="/members/chat">
                 Group Chat
               </Link>
