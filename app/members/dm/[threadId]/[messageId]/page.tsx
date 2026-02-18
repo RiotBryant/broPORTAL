@@ -1,12 +1,20 @@
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import DMUI from "@/components/DMUI";
+import TopBar from "@/components/TopBar";
 
-export default function ThreadPage({ params }: { params: { threadId: string } }) {
+export default function DMDeepLinkPage({
+  params,
+}: {
+  params: { threadId: string; messageId: string };
+}) {
   return (
     <>
-      <TopBar title={`DM Thread: ${params.threadId}`} subtitle="Conversation (skeleton)" right={<Link className="pill" href="/members/inbox">← Inbox</Link>} />
-      <DMUI initialThreadId={...} />
+      <TopBar
+        title={`DM Thread: ${params.threadId}`}
+        subtitle="Conversation"
+        right={<Link className="pill" href="/members/inbox">← Inbox</Link>}
+      />
+      <DMUI initialThreadId={params.threadId} />
     </>
   );
 }
