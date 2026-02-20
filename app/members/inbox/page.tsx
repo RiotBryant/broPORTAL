@@ -50,7 +50,12 @@ function formatShort(iso: string | null) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default async function BroMailInboxPage() {
+export default async function BroMailInboxPage({
+  searchParams,
+}: {
+  searchParams: { q?: string };
+}) {
+  const q = (searchParams?.q || "").toLowerCase().trim();
   const cookieStore = cookies();
 
   const supabase = createServerClient(
