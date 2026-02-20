@@ -21,6 +21,7 @@ type ThreadItem = {
 
 type MessagePreview = {
   thread_id: string;
+  sender_id: string | null;
   body: string | null;
   created_at: string;
 };
@@ -56,6 +57,7 @@ export default async function BroMailInboxPage({
   searchParams: { q?: string };
 }) {
   const q = (searchParams?.q || "").toLowerCase().trim();
+
   const cookieStore = cookies();
 
   const supabase = createServerClient(
@@ -79,14 +81,14 @@ export default async function BroMailInboxPage({
 
   if (!user) redirect("/login?redirect=/members/inbox");
 
-  // Profile for greeting
+  // ✅ Profile for greeting (FIXED)
   const { data: myProfile } = await supabase
-   .from("dm_messages")
-.select("thread_id, sender_id, body, created_at")
+    .from("profiles")
+    .select("id, display_name, full_name, email")
     .eq("id", user.id)
     .maybeSingle();
 
-  const myName = pickName(myProfile || null);
+  const myName = pickName((myProfile as any) || null);
 
   // Thread IDs I belong to
   const { data: myThreads, error: threadsErr } = await supabase
@@ -98,6 +100,7 @@ export default async function BroMailInboxPage({
     return (
       <Shell>
         <Header myName={myName} />
+        <SearchBar />
         <GlassCard>
           <div className="text-sm text-white/80">broMAIL couldn’t load.</div>
           <div className="mt-2 text-xs text-white/60">
@@ -109,7 +112,8 @@ export default async function BroMailInboxPage({
   }
 
   const threadIds = (myThreads || []).map((r: any) => r.thread_id).filter(Boolean);
-    // Read-tracking rows for me
+
+  // ✅ Read-tracking rows for me
   const { data: reads } = await supabase
     .from("dm_thread_reads")
     .select("thread_id, last_read_at")
@@ -143,6 +147,7 @@ export default async function BroMailInboxPage({
     if (!m?.thread_id || !m?.user_id) continue;
     if (m.user_id !== user.id) otherByThread.set(m.thread_id, m.user_id);
   }
+
   const otherUserIds = Array.from(new Set(Array.from(otherByThread.values())));
 
   // Pull names for "other users"
@@ -156,25 +161,49 @@ export default async function BroMailInboxPage({
     nameByUser.set(p.id, pickName(p));
   }
 
-  // Pull recent messages and pick last message per thread
+  // ✅ Pull recent messages (FIXED: includes sender_id)
   const { data: recentMsgs } = await supabase
     .from("dm_messages")
-    .select("thread_id, body, created_at")
+    .select("thread_id, sender_id, body, created_at")
     .in("thread_id", threadIds)
     .order("created_at", { ascending: false })
-    .limit(300);
+    .limit(400);
 
+  // Last message per thread
   const lastByThread = new Map<string, MessagePreview>();
-  for (const m of (recentMsgs || []) as MessagePreview[]) {
+  for (const m of (recentMsgs || []) as any[]) {
     if (!m.thread_id) continue;
     if (lastByThread.has(m.thread_id)) continue;
-    lastByThread.set(m.thread_id, m);
+    lastByThread.set(m.thread_id, m as MessagePreview);
   }
 
+  // ✅ Unread counts per thread
+  const unreadCountByThread = new Map<string, number>();
+
+  for (const m of (recentMsgs || []) as any[]) {
+    const tid = m.thread_id;
+    if (!tid) continue;
+
+    // don't count my own messages as unread
+    if (m.sender_id === user.id) continue;
+
+    const lastRead = readByThread.get(tid);
+    if (!lastRead) {
+      unreadCountByThread.set(tid, (unreadCountByThread.get(tid) || 0) + 1);
+      continue;
+    }
+
+    if (new Date(m.created_at).getTime() > new Date(lastRead).getTime()) {
+      unreadCountByThread.set(tid, (unreadCountByThread.get(tid) || 0) + 1);
+    }
+  }
+
+  // Build thread items
   const items: ThreadItem[] = threadIds.map((tid) => {
     const otherId = otherByThread.get(tid) || null;
     const otherName = otherId ? nameByUser.get(otherId) || "broTHER" : "broTHER";
     const last = lastByThread.get(tid);
+
     return {
       threadId: tid,
       otherUserId: otherId,
@@ -184,29 +213,41 @@ export default async function BroMailInboxPage({
     };
   });
 
-  // sort newest activity first
+  // Sort newest activity first
   items.sort((a, b) => {
     const ta = a.lastAt ? new Date(a.lastAt).getTime() : 0;
     const tb = b.lastAt ? new Date(b.lastAt).getTime() : 0;
     return tb - ta;
   });
 
-  // pick first thread as the preview target
-  const previewThreadId = items[0]?.threadId;
+  // ✅ Search filter (name or last message)
+  const visibleItems = q
+    ? items.filter((t) => {
+        const a = (t.otherName || "").toLowerCase();
+        const b = (t.lastBody || "").toLowerCase();
+        return a.includes(q) || b.includes(q);
+      })
+    : items;
 
-  // load preview (latest ~15 messages) for the right panel
-  const { data: previewMsgs } = await supabase
-    .from("dm_messages")
-    .select("id, thread_id, sender_id, body, created_at")
-    .eq("thread_id", previewThreadId)
-    .order("created_at", { ascending: false })
-    .limit(15);
+  // Preview thread = first visible thread (so search affects preview)
+  const previewThreadId = visibleItems[0]?.threadId || null;
 
-  const preview = (previewMsgs || []).reverse() as any[];
+  // Load preview messages
+  const { data: previewMsgs } = previewThreadId
+    ? await supabase
+        .from("dm_messages")
+        .select("id, thread_id, sender_id, body, created_at")
+        .eq("thread_id", previewThreadId)
+        .order("created_at", { ascending: false })
+        .limit(15)
+    : ({ data: [] } as any);
+
+  const preview = ((previewMsgs || []) as any[]).reverse();
 
   return (
     <Shell>
       <Header myName={myName} />
+      <SearchBar />
       <ActionsRow />
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -214,46 +255,66 @@ export default async function BroMailInboxPage({
         <div className="lg:col-span-5">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-medium text-white/80">Inbox</div>
-            <div className="text-xs text-white/50">{items.length} thread(s)</div>
+            <div className="text-xs text-white/50">{visibleItems.length} thread(s)</div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
             <div className="space-y-2">
-              {items.map((t) => {
-                const active = t.threadId === previewThreadId;
-                return (
-                  <Link
-                    key={t.threadId}
-                    href={`/members/inbox/${t.threadId}`}
-                    className={[
-                      "block rounded-2xl border p-4 transition",
-                      active
-                        ? "border-white/20 bg-white/10"
-                        : "border-white/10 bg-white/5 hover:bg-white/10",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold tracking-tight">
-                          {t.otherName}
-                        </div>
-                        <div className="mt-1 text-xs text-white/60">
-                          {t.lastBody}
-                        </div>
-                      </div>
-                      <div className="text-xs text-white/50 whitespace-nowrap">
-                        {formatShort(t.lastAt)}
-                      </div>
-                    </div>
+              {visibleItems.length === 0 ? (
+                <div className="p-4 text-sm text-white/60">
+                  No results for “{q}”.
+                </div>
+              ) : (
+                visibleItems.map((t) => {
+                  const active = t.threadId === previewThreadId;
+                  const unread = unreadCountByThread.get(t.threadId) || 0;
 
-                    <div className="mt-3 flex gap-2">
-                      <span className="btn btnGhost text-xs px-3 py-1">
-                        Open broMAIL →
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={t.threadId}
+                      href={`/members/inbox/${t.threadId}`}
+                      className={[
+                        "block rounded-2xl border p-4 transition",
+                        active
+                          ? "border-white/20 bg-white/10"
+                          : "border-white/10 bg-white/5 hover:bg-white/10",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold tracking-tight flex items-center gap-2">
+                            <span className="truncate">{t.otherName}</span>
+
+                            {unread > 0 ? (
+                              <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-black">
+                                {unread}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-white/60">
+                                read
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-1 text-xs text-white/60 truncate">
+                            {t.lastBody}
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-white/50 whitespace-nowrap">
+                          {formatShort(t.lastAt)}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex gap-2">
+                        <span className="btn btnGhost text-xs px-3 py-1">
+                          Open broMAIL →
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -262,17 +323,21 @@ export default async function BroMailInboxPage({
         <div className="lg:col-span-7">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-medium text-white/80">Preview</div>
-            <Link
-              href={`/members/inbox/${previewThreadId}`}
-              className="btn btnPrimary"
-            >
-              broREPLY →
-            </Link>
+
+            {previewThreadId ? (
+              <Link href={`/members/inbox/${previewThreadId}`} className="btn btnPrimary">
+                broREPLY →
+              </Link>
+            ) : (
+              <span className="text-xs text-white/50">No thread selected</span>
+            )}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="max-h-[55vh] overflow-y-auto space-y-3 pr-2">
-              {preview.length === 0 ? (
+              {previewThreadId === null ? (
+                <div className="text-sm text-white/70">Pick a thread to preview.</div>
+              ) : preview.length === 0 ? (
                 <div className="text-sm text-white/70">No messages yet.</div>
               ) : (
                 preview.map((m) => {
@@ -300,9 +365,12 @@ export default async function BroMailInboxPage({
               <div className="text-xs text-white/60">
                 Open a thread for full view + sending.
               </div>
-              <Link href={`/members/inbox/${previewThreadId}`} className="btn btnGhost">
-                Full broMAIL →
-              </Link>
+
+              {previewThreadId ? (
+                <Link href={`/members/inbox/${previewThreadId}`} className="btn btnGhost">
+                  Full broMAIL →
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>
