@@ -11,73 +11,103 @@ type ProfileLite = {
   email: string | null;
 };
 
-export default function StartDmClient() {
+function pickName(p: ProfileLite | null) {
+  return p?.display_name || p?.full_name || p?.email || "broTHER";
+}
+
+export default function StartDmClient({ otherUserId }: { otherUserId: string }) {
   const router = useRouter();
-  const [me, setMe] = useState<string>("");
-  const [members, setMembers] = useState<ProfileLite[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth?.user?.id;
-      if (!uid) return;
-      setMe(uid);
+      setErr(null);
+      setLoading(true);
 
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, display_name, full_name, email")
-        .order("display_name", { ascending: true })
-        .limit(200);
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) return router.replace("/login?redirect=/members/directory");
 
-      setMembers((profs || []).filter((p: any) => p.id !== uid));
+      const { data: u } = await supabase.auth.getUser();
+      const meId = u.user?.id;
+      if (!meId) return router.replace("/login?redirect=/members/directory");
+
+      if (!otherUserId) {
+        setErr("Missing recipient.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // If a thread already exists with BOTH members, use it
+        const { data: myThreads } = await supabase
+          .from("dm_thread_members")
+          .select("thread_id")
+          .eq("user_id", meId);
+
+        const threadIds = (myThreads || []).map((r: any) => r.thread_id).filter(Boolean);
+
+        if (threadIds.length > 0) {
+          const { data: members } = await supabase
+            .from("dm_thread_members")
+            .select("thread_id, user_id")
+            .in("thread_id", threadIds);
+
+          const byThread = new Map<string, Set<string>>();
+          for (const m of members || []) {
+            if (!m?.thread_id || !m?.user_id) continue;
+            if (!byThread.has(m.thread_id)) byThread.set(m.thread_id, new Set());
+            byThread.get(m.thread_id)!.add(m.user_id);
+          }
+
+          const existing = Array.from(byThread.entries()).find(([_, set]) => {
+            return set.has(meId) && set.has(otherUserId);
+          });
+
+          if (existing?.[0]) {
+            router.replace(`/members/inbox/${existing[0]}`);
+            return;
+          }
+        }
+
+        // Otherwise create a new thread + memberships
+        const { data: newThread, error: tErr } = await supabase
+          .from("dm_threads")
+          .insert({})
+          .select("id")
+          .single();
+
+        if (tErr) throw tErr;
+
+        const threadId = (newThread as any).id as string;
+
+        const { error: mErr } = await supabase.from("dm_thread_members").insert([
+          { thread_id: threadId, user_id: meId },
+          { thread_id: threadId, user_id: otherUserId },
+        ]);
+
+        if (mErr) throw mErr;
+
+        // Mark as read right away for me
+        await supabase.from("dm_thread_reads").upsert(
+          { thread_id: threadId, user_id: meId, last_read_at: new Date().toISOString() },
+          { onConflict: "thread_id,user_id" }
+        );
+
+        router.replace(`/members/inbox/${threadId}`);
+      } catch (e: any) {
+        setErr(e?.message ?? "Couldn’t start broMAIL.");
+        setLoading(false);
+      }
     })();
-  }, []);
-
-  const labelFor = (p: ProfileLite) =>
-    p.display_name || p.full_name || p.email || p.id;
-
-  async function start() {
-    if (!selectedUserId) return;
-
-    const { data, error } = await supabase.rpc("get_or_create_dm_thread", {
-      other_user: selectedUserId,
-    });
-
-    if (error) {
-      console.error(error);
-      alert("Couldn’t start DM. This is usually RLS or the RPC function missing.");
-      return;
-    }
-
-    router.push(`/members/dm/${data}`);
-  }
+  }, [otherUserId, router]);
 
   return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="text-sm font-medium">Start a broMAIL</div>
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <select
-          value={selectedUserId}
-          onChange={(e) => setSelectedUserId(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-[#0b0b12] px-3 py-2 text-sm text-white outline-none"
-        >
-          <option value="">Choose a member…</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {labelFor(m)}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={start}
-          disabled={!selectedUserId}
-          className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-40"
-        >
-          Start
-        </button>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="text-sm text-white/80">
+        {loading ? "Opening broMAIL…" : "Ready."}
       </div>
+      {err ? <div className="mt-2 text-sm text-red-300">{err}</div> : null}
     </div>
   );
 }
