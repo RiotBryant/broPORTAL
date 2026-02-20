@@ -140,7 +140,16 @@ export default function BroMailThreadPage() {
     setMsgs((data || []) as MsgRow[]);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
-
+  if (!meId) return;
+      // Mark thread as read (so unread badge clears)
+      await supabase.from("dm_thread_reads").upsert(
+        {
+          thread_id: tid,
+          user_id: meId,
+          last_read_at: new Date().toISOString(),
+        },
+        { onConflict: "thread_id,user_id" }
+      );
   async function send() {
     setErr(null);
     const clean = text.trim();
