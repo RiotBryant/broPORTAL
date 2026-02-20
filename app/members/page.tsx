@@ -136,7 +136,7 @@ export default function MembersHome() {
                 Open broCHAT →
               </Link>
               <Link className="btn btnGhost" href="/members/inbox">
-                DM Inbox
+                YOUR broMAIL
               </Link>
             </>
           }
@@ -149,7 +149,7 @@ export default function MembersHome() {
           actions={
             <>
               <Link className="btn btnPrimary" href="/members/lounge">
-                Enter Lounge
+                Coming Soon
               </Link>
               <Link
                 className="btn btnGhost"
