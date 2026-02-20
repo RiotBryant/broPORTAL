@@ -40,10 +40,11 @@ export default function BroMailThreadPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-
   const canSend = useMemo(() => text.trim().length > 0 && !saving, [text, saving]);
 
   useEffect(() => {
+    let isMounted = true;
+
     (async () => {
       setLoading(true);
       setErr(null);
@@ -55,38 +56,38 @@ export default function BroMailThreadPage() {
       const { data: u } = await supabase.auth.getUser();
       const uid = u.user?.id;
       if (!uid) return router.replace("/login");
+
+      if (!isMounted) return;
       setMeId(uid);
 
-      // Get my profile name for greeting
+      // Greeting name
       const { data: myProf } = await supabase
         .from("profiles")
         .select("id, display_name, full_name, email")
         .eq("id", uid)
         .maybeSingle();
 
+      if (!isMounted) return;
       setMeName(pickName((myProf as any) || null));
 
-      // Guard: confirm I am in this thread (RLS should enforce too)
-      const { data: membership, error: memErr } = await supabase
+      // Guard: confirm I'm in this thread (RLS should enforce too)
+      const { data: membership } = await supabase
         .from("dm_thread_members")
         .select("thread_id, user_id")
         .eq("thread_id", threadId)
         .eq("user_id", uid)
         .maybeSingle();
 
-      if (memErr) console.error(memErr);
       if (!membership) {
         router.replace("/members/inbox");
         return;
       }
 
-      // Find the other user (for the header)
-      const { data: members, error: membersErr } = await supabase
+      // Find other member for header
+      const { data: members } = await supabase
         .from("dm_thread_members")
         .select("user_id")
         .eq("thread_id", threadId);
-
-      if (membersErr) console.error(membersErr);
 
       const otherId = (members || []).map((m: any) => m.user_id).find((x: string) => x !== uid);
 
@@ -97,34 +98,40 @@ export default function BroMailThreadPage() {
           .eq("id", otherId)
           .maybeSingle();
 
+        if (!isMounted) return;
         setOtherName(pickName((otherProf as any) || null));
       }
 
-      // Load messages
-      await loadMessages(threadId);
+      // Load messages + mark read
+      await loadMessagesAndMarkRead(threadId, uid);
 
-      // Realtime: updates when new message arrives
+      // Realtime: refresh on new messages
       const channel = supabase
         .channel(`broMAIL:${threadId}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${threadId}` },
           async () => {
-            await loadMessages(threadId);
+            await loadMessagesAndMarkRead(threadId, uid);
           }
         )
         .subscribe();
 
+      if (!isMounted) return;
       setLoading(false);
 
       return () => {
         supabase.removeChannel(channel);
       };
     })();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
 
-  async function loadMessages(tid: string) {
+  async function loadMessagesAndMarkRead(tid: string, uid: string) {
     const { data, error } = await supabase
       .from("dm_messages")
       .select("id, created_at, thread_id, sender_id, body")
@@ -139,17 +146,18 @@ export default function BroMailThreadPage() {
 
     setMsgs((data || []) as MsgRow[]);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+    // ✅ Mark as read (unread badge clears)
+    await supabase.from("dm_thread_reads").upsert(
+      {
+        thread_id: tid,
+        user_id: uid,
+        last_read_at: new Date().toISOString(),
+      },
+      { onConflict: "thread_id,user_id" }
+    );
   }
-  if (!meId) return;
-      // Mark thread as read (so unread badge clears)
-      await supabase.from("dm_thread_reads").upsert(
-        {
-          thread_id: tid,
-          user_id: meId,
-          last_read_at: new Date().toISOString(),
-        },
-        { onConflict: "thread_id,user_id" }
-      );
+
   async function send() {
     setErr(null);
     const clean = text.trim();
@@ -170,15 +178,7 @@ export default function BroMailThreadPage() {
       if (insErr) throw insErr;
 
       setText("");
-      await loadMessages(threadId);
-      await supabase.from("dm_thread_reads").upsert(
-  {
-    thread_id: threadId,
-    user_id: uid,
-    last_read_at: new Date().toISOString(),
-  },
-  { onConflict: "thread_id,user_id" }
-);
+      await loadMessagesAndMarkRead(threadId, uid);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to send.");
     } finally {
@@ -203,9 +203,7 @@ export default function BroMailThreadPage() {
 
         <div className="mt-4">
           <div className="text-xs tracking-widest text-white/50">broMAIL</div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            What&apos;s up, {meName}.
-          </h1>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">What&apos;s up, {meName}.</h1>
           <div className="mt-2 text-sm text-white/60">
             Thread with <span className="text-white/85 font-medium">{otherName}</span>
           </div>
