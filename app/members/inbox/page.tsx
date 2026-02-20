@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import SearchBar from "./SearchBar";
 
 type ProfileLite = {
   id: string;
