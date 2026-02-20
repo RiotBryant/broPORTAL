@@ -109,6 +109,16 @@ export default async function BroMailInboxPage({
   }
 
   const threadIds = (myThreads || []).map((r: any) => r.thread_id).filter(Boolean);
+    // Read-tracking rows for me
+  const { data: reads } = await supabase
+    .from("dm_thread_reads")
+    .select("thread_id, last_read_at")
+    .eq("user_id", user.id);
+
+  const readByThread = new Map<string, string>();
+  for (const r of reads || []) {
+    readByThread.set((r as any).thread_id, (r as any).last_read_at);
+  }
 
   // No threads yet
   if (threadIds.length === 0) {
