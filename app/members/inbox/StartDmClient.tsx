@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient"; // adjust if needed
+import { supabase } from "@/lib/supabase/client";
 
 type ProfileLite = {
   id: string;
