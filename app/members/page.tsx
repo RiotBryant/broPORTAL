@@ -59,7 +59,7 @@ export default function MembersHome() {
     <>
       <TopBar
         title="broT Members Portal"
-        subtitle="Quiet by design • presence over performance"
+        subtitle="Quiet By Design • Presence Over Performance"
         right={
           <>
             {isAdmin && (
@@ -129,7 +129,7 @@ export default function MembersHome() {
         <Card
           title="broCHAT"
           subtitle="Group chat"
-          desc="Real-time group room. Keep it intentional."
+          desc="Real-time group chat room. Keep it intentional."
           actions={
             <>
               <Link className="btn btnPrimary" href="/members/chat">
@@ -145,7 +145,7 @@ export default function MembersHome() {
         <Card
           title="broLOUNGE"
           subtitle="Live rooms"
-          desc="Choose a door. Jitsi links live here."
+          desc="Choose a door. Virtual LIVE links live here."
           actions={
             <>
               <Link className="btn btnPrimary" href="/members/lounge">
