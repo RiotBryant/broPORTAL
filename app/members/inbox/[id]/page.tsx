@@ -162,6 +162,14 @@ export default function BroMailThreadPage() {
 
       setText("");
       await loadMessages(threadId);
+      await supabase.from("dm_thread_reads").upsert(
+  {
+    thread_id: threadId,
+    user_id: uid,
+    last_read_at: new Date().toISOString(),
+  },
+  { onConflict: "thread_id,user_id" }
+);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to send.");
     } finally {
