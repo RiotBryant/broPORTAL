@@ -110,6 +110,7 @@ export default async function BroMailInboxPage() {
     return (
       <Shell>
         <Header myName={myName} />
+        <SearchBar />
         <ActionsRow />
         <EmptyState />
       </Shell>
