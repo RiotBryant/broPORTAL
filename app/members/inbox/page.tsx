@@ -81,8 +81,8 @@ export default async function BroMailInboxPage({
 
   // Profile for greeting
   const { data: myProfile } = await supabase
-    .from("profiles")
-    .select("id, display_name, full_name, email")
+   .from("dm_messages")
+.select("thread_id, sender_id, body, created_at")
     .eq("id", user.id)
     .maybeSingle();
 
