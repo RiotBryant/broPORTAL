@@ -81,7 +81,6 @@ export default async function BroMailInboxPage({
 
   if (!user) redirect("/login?redirect=/members/inbox");
 
-  // ✅ Profile for greeting (FIXED)
   const { data: myProfile } = await supabase
     .from("profiles")
     .select("id, display_name, full_name, email")
@@ -90,7 +89,6 @@ export default async function BroMailInboxPage({
 
   const myName = pickName((myProfile as any) || null);
 
-  // Thread IDs I belong to
   const { data: myThreads, error: threadsErr } = await supabase
     .from("dm_thread_members")
     .select("thread_id")
@@ -113,18 +111,15 @@ export default async function BroMailInboxPage({
 
   const threadIds = (myThreads || []).map((r: any) => r.thread_id).filter(Boolean);
 
-  // ✅ Read-tracking rows for me
+  // Read tracking (for unread badges)
   const { data: reads } = await supabase
     .from("dm_thread_reads")
     .select("thread_id, last_read_at")
     .eq("user_id", user.id);
 
   const readByThread = new Map<string, string>();
-  for (const r of reads || []) {
-    readByThread.set((r as any).thread_id, (r as any).last_read_at);
-  }
+  for (const r of reads || []) readByThread.set((r as any).thread_id, (r as any).last_read_at);
 
-  // No threads yet
   if (threadIds.length === 0) {
     return (
       <Shell>
@@ -136,7 +131,6 @@ export default async function BroMailInboxPage({
     );
   }
 
-  // Pull all members for my threads so we can find "the other person"
   const { data: membersRows } = await supabase
     .from("dm_thread_members")
     .select("thread_id, user_id")
@@ -150,18 +144,15 @@ export default async function BroMailInboxPage({
 
   const otherUserIds = Array.from(new Set(Array.from(otherByThread.values())));
 
-  // Pull names for "other users"
   const { data: others } = await supabase
     .from("profiles")
     .select("id, display_name, full_name, email")
     .in("id", otherUserIds);
 
   const nameByUser = new Map<string, string>();
-  for (const p of (others || []) as ProfileLite[]) {
-    nameByUser.set(p.id, pickName(p));
-  }
+  for (const p of (others || []) as ProfileLite[]) nameByUser.set(p.id, pickName(p));
 
-  // ✅ Pull recent messages (FIXED: includes sender_id)
+  // Recent messages (includes sender_id for unread math)
   const { data: recentMsgs } = await supabase
     .from("dm_messages")
     .select("thread_id, sender_id, body, created_at")
@@ -169,7 +160,7 @@ export default async function BroMailInboxPage({
     .order("created_at", { ascending: false })
     .limit(400);
 
-  // Last message per thread
+  // last message per thread
   const lastByThread = new Map<string, MessagePreview>();
   for (const m of (recentMsgs || []) as any[]) {
     if (!m.thread_id) continue;
@@ -177,14 +168,11 @@ export default async function BroMailInboxPage({
     lastByThread.set(m.thread_id, m as MessagePreview);
   }
 
-  // ✅ Unread counts per thread
+  // unread counts per thread
   const unreadCountByThread = new Map<string, number>();
-
   for (const m of (recentMsgs || []) as any[]) {
     const tid = m.thread_id;
     if (!tid) continue;
-
-    // don't count my own messages as unread
     if (m.sender_id === user.id) continue;
 
     const lastRead = readByThread.get(tid);
@@ -198,7 +186,6 @@ export default async function BroMailInboxPage({
     }
   }
 
-  // Build thread items
   const items: ThreadItem[] = threadIds.map((tid) => {
     const otherId = otherByThread.get(tid) || null;
     const otherName = otherId ? nameByUser.get(otherId) || "broTHER" : "broTHER";
@@ -213,14 +200,13 @@ export default async function BroMailInboxPage({
     };
   });
 
-  // Sort newest activity first
   items.sort((a, b) => {
     const ta = a.lastAt ? new Date(a.lastAt).getTime() : 0;
     const tb = b.lastAt ? new Date(b.lastAt).getTime() : 0;
     return tb - ta;
   });
 
-  // ✅ Search filter (name or last message)
+  // Search filter (name or last message)
   const visibleItems = q
     ? items.filter((t) => {
         const a = (t.otherName || "").toLowerCase();
@@ -229,10 +215,8 @@ export default async function BroMailInboxPage({
       })
     : items;
 
-  // Preview thread = first visible thread (so search affects preview)
   const previewThreadId = visibleItems[0]?.threadId || null;
 
-  // Load preview messages
   const { data: previewMsgs } = previewThreadId
     ? await supabase
         .from("dm_messages")
@@ -261,9 +245,7 @@ export default async function BroMailInboxPage({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
             <div className="space-y-2">
               {visibleItems.length === 0 ? (
-                <div className="p-4 text-sm text-white/60">
-                  No results for “{q}”.
-                </div>
+                <div className="p-4 text-sm text-white/60">No results for “{q}”.</div>
               ) : (
                 visibleItems.map((t) => {
                   const active = t.threadId === previewThreadId;
@@ -296,20 +278,14 @@ export default async function BroMailInboxPage({
                             )}
                           </div>
 
-                          <div className="mt-1 text-xs text-white/60 truncate">
-                            {t.lastBody}
-                          </div>
+                          <div className="mt-1 text-xs text-white/60 truncate">{t.lastBody}</div>
                         </div>
 
-                        <div className="text-xs text-white/50 whitespace-nowrap">
-                          {formatShort(t.lastAt)}
-                        </div>
+                        <div className="text-xs text-white/50 whitespace-nowrap">{formatShort(t.lastAt)}</div>
                       </div>
 
                       <div className="mt-3 flex gap-2">
-                        <span className="btn btnGhost text-xs px-3 py-1">
-                          Open broMAIL →
-                        </span>
+                        <span className="btn btnGhost text-xs px-3 py-1">Open broMAIL →</span>
                       </div>
                     </Link>
                   );
@@ -362,9 +338,7 @@ export default async function BroMailInboxPage({
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-xs text-white/60">
-                Open a thread for full view + sending.
-              </div>
+              <div className="text-xs text-white/60">Open a thread for full view + sending.</div>
 
               {previewThreadId ? (
                 <Link href={`/members/inbox/${previewThreadId}`} className="btn btnGhost">
@@ -426,11 +400,7 @@ function ActionsRow() {
 }
 
 function GlassCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-      {children}
-    </div>
-  );
+  return <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">{children}</div>;
 }
 
 function EmptyState() {
