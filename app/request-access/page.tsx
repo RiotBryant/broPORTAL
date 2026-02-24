@@ -8,6 +8,7 @@ type RequestForm = {
   full_name: string;
   preferred_name: string;
   email: string;
+  birthday: string; // YYYY-MM-DD from <input type="date" />
   phone: string;
   location: string;
   referred_by: string;
@@ -26,6 +27,7 @@ export default function RequestAccessPage() {
     full_name: "",
     preferred_name: "",
     email: "",
+    birthday: "",
     phone: "",
     location: "",
     referred_by: "",
@@ -49,6 +51,7 @@ export default function RequestAccessPage() {
   const canSubmit =
     req.full_name.trim().length >= 2 &&
     req.email.trim().includes("@") &&
+    req.birthday.trim().length === 10 && // YYYY-MM-DD
     req.looking_for.trim().length >= 10 &&
     req.why_brother_collective.trim().length >= 10 &&
     req.agree &&
@@ -68,6 +71,7 @@ export default function RequestAccessPage() {
       full_name: req.full_name.trim(),
       preferred_name: req.preferred_name.trim() || null,
       email: req.email.trim().toLowerCase(),
+      birthday: req.birthday || null, // date string accepted by Postgres date
       phone: req.phone.trim() || null,
       location: req.location.trim() || null,
       referred_by: req.referred_by.trim() || null,
@@ -108,11 +112,7 @@ export default function RequestAccessPage() {
         linear-gradient(135deg, #5c7cff 0%, #7c78ff 35%, #8db8ff 100%);
     }
 
-    .cardWrap {
-      width: 100%;
-      max-width: 520px;
-      position: relative;
-    }
+    .cardWrap { width: 100%; max-width: 520px; position: relative; }
 
     .glassShadow {
       position: absolute;
@@ -131,35 +131,15 @@ export default function RequestAccessPage() {
       border-radius: 16px;
       background: rgba(255,255,255,0.92);
       border: 1px solid rgba(0,0,0,0.06);
-      box-shadow:
-        0 18px 60px rgba(0,0,0,0.25),
-        0 0 0 1px rgba(255,255,255,0.35) inset;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.35) inset;
       overflow: hidden;
     }
 
-    .header {
-      padding: 18px 18px 10px;
-      text-align: center;
-      color: #0b0b12;
-    }
+    .header { padding: 18px 18px 10px; text-align: center; color: #0b0b12; }
+    .title { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: 0.02em; }
+    .subtitle { margin: 6px 0 0; font-size: 12px; color: rgba(11,11,18,0.55); }
 
-    .title {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-    }
-
-    .subtitle {
-      margin: 6px 0 0;
-      font-size: 12px;
-      color: rgba(11,11,18,0.55);
-    }
-
-    .body {
-      padding: 14px 18px 18px;
-      color: #0b0b12;
-    }
+    .body { padding: 14px 18px 18px; color: #0b0b12; }
 
     .topRow {
       display: flex;
@@ -181,21 +161,10 @@ export default function RequestAccessPage() {
       cursor: pointer;
     }
 
-    .badge {
-      font-size: 11px;
-      font-weight: 900;
-      color: rgba(11,11,18,0.55);
-    }
+    .badge { font-size: 11px; font-weight: 900; color: rgba(11,11,18,0.55); }
 
-    .row2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .field {
-      margin-top: 10px;
-    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { margin-top: 10px; }
 
     .label {
       display: block;
@@ -323,12 +292,16 @@ export default function RequestAccessPage() {
                 {/* honeypot */}
                 <div className="hidden">
                   <label className="label">Company</label>
-                  <input className="input" value={req.company} onChange={(e) => setField("company", e.target.value)} />
+                  <input
+                    className="input"
+                    value={req.company}
+                    onChange={(e) => setField("company", e.target.value)}
+                  />
                 </div>
 
                 <div className="row2">
                   <div className="field">
-                    <label className="label">Full name</label>
+                    <label className="label">Legal Full Name</label>
                     <input
                       className="input"
                       placeholder="First + last"
@@ -352,7 +325,7 @@ export default function RequestAccessPage() {
 
                 <div className="row2">
                   <div className="field">
-                    <label className="label">Email</label>
+                    <label className="label">Email Address</label>
                     <input
                       className="input"
                       placeholder="you@email.com"
@@ -364,7 +337,20 @@ export default function RequestAccessPage() {
                   </div>
 
                   <div className="field">
-                    <label className="label">Phone (optional)</label>
+                    <label className="label">Birthday 00/00/0000</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={req.birthday}
+                      onChange={(e) => setField("birthday", e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="row2">
+                  <div className="field">
+                    <label className="label">Phone Number</label>
                     <input
                       className="input"
                       placeholder="(###) ###-####"
@@ -373,9 +359,7 @@ export default function RequestAccessPage() {
                       autoComplete="tel"
                     />
                   </div>
-                </div>
 
-                <div className="row2">
                   <div className="field">
                     <label className="label">Location (general)</label>
                     <input
@@ -385,16 +369,16 @@ export default function RequestAccessPage() {
                       onChange={(e) => setField("location", e.target.value)}
                     />
                   </div>
+                </div>
 
-                  <div className="field">
-                    <label className="label">Referred by (optional)</label>
-                    <input
-                      className="input"
-                      placeholder="Name or @handle"
-                      value={req.referred_by}
-                      onChange={(e) => setField("referred_by", e.target.value)}
-                    />
-                  </div>
+                <div className="field">
+                  <label className="label">Referred by (optional)</label>
+                  <input
+                    className="input"
+                    placeholder="Name or @handle"
+                    value={req.referred_by}
+                    onChange={(e) => setField("referred_by", e.target.value)}
+                  />
                 </div>
 
                 <div className="field">
@@ -420,7 +404,11 @@ export default function RequestAccessPage() {
                 </div>
 
                 <label className="agree">
-                  <input type="checkbox" checked={req.agree} onChange={(e) => setField("agree", e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={req.agree}
+                    onChange={(e) => setField("agree", e.target.checked)}
+                  />
                   <span>
                     I understand this is a respectful, confidential space and I’m willing to follow structure.
                   </span>
