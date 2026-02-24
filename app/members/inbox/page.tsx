@@ -41,6 +41,15 @@ function formatListTime(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+/* ---------------- Button classes (ON BRAND) ---------------- */
+
+const btnBase =
+  "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm transition border";
+
+const btnPrimary = `${btnBase} bg-white text-black border-white/20 hover:bg-white/90`;
+const btnGhost = `${btnBase} bg-transparent text-white border-white/15 hover:bg-white/10`;
+const btnCompose = `${btnBase} w-full bg-white text-black border-white/20 hover:bg-white/90`;
+
 export default async function BroMailInboxPage({
   searchParams,
 }: {
@@ -272,7 +281,11 @@ export default async function BroMailInboxPage({
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <div className={`truncate text-sm ${isUnread ? "font-semibold text-white" : "text-white/85"}`}>
+                                  <div
+                                    className={`truncate text-sm ${
+                                      isUnread ? "font-semibold text-white" : "text-white/85"
+                                    }`}
+                                  >
                                     {t.otherName}
                                   </div>
                                   {isUnread ? (
@@ -286,7 +299,11 @@ export default async function BroMailInboxPage({
                                   )}
                                 </div>
 
-                                <div className={`mt-1 truncate text-sm ${isUnread ? "text-white/90" : "text-white/70"}`}>
+                                <div
+                                  className={`mt-1 truncate text-sm ${
+                                    isUnread ? "text-white/90" : "text-white/70"
+                                  }`}
+                                >
                                   {t.subject}
                                 </div>
                                 <div className="mt-1 truncate text-xs text-white/55">{t.snippet}</div>
@@ -311,7 +328,7 @@ export default async function BroMailInboxPage({
                 <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                   <div className="text-sm font-medium text-white/85">Preview</div>
                   {activeThreadId ? (
-                    <Link href={`/members/inbox/${activeThreadId}`} className="btnPrimary">
+                    <Link href={`/members/inbox/${activeThreadId}`} className={btnPrimary}>
                       Open →
                     </Link>
                   ) : null}
@@ -347,7 +364,7 @@ export default async function BroMailInboxPage({
                 {activeThreadId ? (
                   <div className="px-4 py-3 border-t border-white/10 flex items-center justify-between">
                     <div className="text-xs text-white/60">Open the thread to reply.</div>
-                    <Link href={`/members/inbox/${activeThreadId}`} className="btnGhost">
+                    <Link href={`/members/inbox/${activeThreadId}`} className={btnGhost}>
                       Reply →
                     </Link>
                   </div>
@@ -378,7 +395,7 @@ function MailLayout({ children }: { children: React.ReactNode }) {
 function TopBar({ myName, q, tab }: { myName: string; q: string; tab: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3">
-      <Link href="/members" className="btnGhost">
+      <Link href="/members" className={btnGhost}>
         ← Back
       </Link>
 
@@ -411,7 +428,7 @@ function SideNav({ activeTab }: { activeTab: string }) {
     <div className="col-span-12 lg:col-span-3">
       <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
         <div className="p-3">
-          <Link href="/members/inbox/compose" className="btnCompose">
+          <Link href="/members/inbox/compose" className={btnCompose}>
             + Compose
           </Link>
         </div>
@@ -442,82 +459,3 @@ function NavItem({ href, label, active }: { href: string; label: string; active:
 function MainCard({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/10 bg-white/5 p-5">{children}</div>;
 }
-
-/* Buttons (on-brand + consistent) */
-const btnBase =
-  "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm transition border";
-
-function Btn({ className, children }: { className: string; children: React.ReactNode }) {
-  return <span className={`${btnBase} ${className}`}>{children}</span>;
-}
-
-// Tailwind “button classes”
-declare global {
-  // eslint-disable-next-line no-var
-  var __btn: never;
-}
-
-function StylesHack() {
-  return null;
-}
-
-const btnPrimaryClass = "bg-white text-black border-white/20 hover:bg-white/90";
-const btnGhostClass = "bg-transparent text-white border-white/15 hover:bg-white/10";
-const btnComposeClass = "w-full bg-white text-black border-white/20 hover:bg-white/90";
-
-function _unused() {
-  return (
-    <>
-      <Btn className={btnPrimaryClass}>x</Btn>
-      <Btn className={btnGhostClass}>x</Btn>
-      <Btn className={btnComposeClass}>x</Btn>
-    </>
-  );
-}
-
-// small helpers to use as className on Links
-function btnPrimary() {
-  return `${btnBase} ${btnPrimaryClass}`;
-}
-function btnGhost() {
-  return `${btnBase} ${btnGhostClass}`;
-}
-function btnCompose() {
-  return `${btnBase} ${btnComposeClass}`;
-}
-
-// attach as string props
-const btnPrimary = btnPrimary();
-const btnGhost = btnGhost();
-const btnCompose = btnCompose();
-
-// @ts-ignore
-(globalThis as any).btnPrimary = btnPrimary;
-// @ts-ignore
-(globalThis as any).btnGhost = btnGhost;
-// @ts-ignore
-(globalThis as any).btnCompose = btnCompose;
-
-// Use these in JSX via className
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const btnPrimaryExport = btnPrimary;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const btnGhostExport = btnGhost;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const btnComposeExport = btnCompose;
-
-// Make them available in this module scope
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const btnPrimary2 = btnPrimary;
-
-// These are referenced above:
-const btnPrimary = `${btnBase} ${btnPrimaryClass}`;
-const btnGhost = `${btnBase} ${btnGhostClass}`;
-const btnCompose = `${btnBase} ${btnComposeClass}`;
-
-// And these too:
-const btnPrimaryName = "btnPrimary";
-const btnGhostName = "btnGhost";
-const btnComposeName = "btnCompose";
-
-// TS won’t create CSS classes; we use strings directly:
