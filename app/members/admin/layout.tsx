@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 const role = String((me as any)?.role ?? "member").toLowerCase().trim();
 
 const canEnterAdmin = role === "admin" || role === "superadmin" || role === "god";
-if (!canEnterAdmin) redirect("/members");
+
   const name =
     (me as any)?.display_name || (me as any)?.full_name || (me as any)?.email || "Admin";
 
