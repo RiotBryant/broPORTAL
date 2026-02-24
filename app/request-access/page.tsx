@@ -301,10 +301,10 @@ export default function RequestAccessPage() {
 
                 <div className="row2">
                   <div className="field">
-                    <label className="label">Legal Full Name</label>
+                    <label className="label">Legal Full Name (confidential)</label>
                     <input
                       className="input"
-                      placeholder="First + last"
+                      placeholder="First + Last"
                       value={req.full_name}
                       onChange={(e) => setField("full_name", e.target.value)}
                       autoComplete="name"
@@ -313,7 +313,7 @@ export default function RequestAccessPage() {
                   </div>
 
                   <div className="field">
-                    <label className="label">Preferred name</label>
+                    <label className="label">Preferred Name</label>
                     <input
                       className="input"
                       placeholder="What should we call you?"
@@ -337,7 +337,7 @@ export default function RequestAccessPage() {
                   </div>
 
                   <div className="field">
-                    <label className="label">Birthday 00/00/0000</label>
+                    <label className="label">Birthday</label>
                     <input
                       type="date"
                       className="input"
