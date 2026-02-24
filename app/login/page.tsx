@@ -173,7 +173,7 @@ function LoginInner() {
           <button
             type="button"
             className="btn btnSecondary"
-            onClick={() => router.push("/members/request-access")}
+            onClick={() => router.push("/request-access")}
           >
             Request Access
           </button>
