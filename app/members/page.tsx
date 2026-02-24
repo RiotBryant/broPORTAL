@@ -7,7 +7,7 @@ import Card from "@/components/Card";
 import Countdown from "@/components/Countdown";
 import { supabase } from "@/lib/supabase/client";
 
-type Role = "member" | "admin" | "superadmin";
+type Role = "member" | "admin" | "superadmin"| "god";
 
 export default function MembersHome() {
   const [role, setRole] = useState<Role>("member");
@@ -50,8 +50,8 @@ export default function MembersHome() {
     };
   }, []);
 
-  const isAdmin = useMemo(
-    () => role === "admin" || role === "superadmin",
+  const role = String(me?.role ?? "member").toLowerCase().trim();
+const isAdmin = role === "admin" || role === "superadmin" || role === "god";
     [role]
   );
 
