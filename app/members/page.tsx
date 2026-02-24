@@ -62,15 +62,11 @@ export default function MembersHome() {
         subtitle="Quiet By Design • Presence Over Performance"
         right={
           <>
-            {isAdmin && (
-              <Link
-                className="pill pillPrimary"
-                href="/members/admin/inbox"
-              >
-                Admin Inbox
-              </Link>
-            )}
-
+       {isAdmin && (
+  <Link className="pill pillPrimary" href="/members/admin">
+    Enter broADMIN
+  </Link>
+)}
             <Link className="pill" href="/members/profile">
               Profile
             </Link>
