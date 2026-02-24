@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
 import Countdown from "@/components/Countdown";
 import { supabase } from "@/lib/supabase/client";
 
-type Role = "member" | "admin" | "superadmin"| "god";
+type Role = "member" | "admin" | "superadmin" | "god";
 
 export default function MembersHome() {
   const [role, setRole] = useState<Role>("member");
@@ -17,31 +17,31 @@ export default function MembersHome() {
     let alive = true;
 
     async function loadUserRole() {
-  const { data: authRes, error: authErr } = await supabase.auth.getUser();
-  const user = authRes?.user;
+      const { data: authRes, error: authErr } = await supabase.auth.getUser();
+      const user = authRes?.user;
 
-  if (authErr || !user) {
-    window.location.href = "/login";
-    return;
-  }
+      if (authErr || !user) {
+        window.location.href = "/login";
+        return;
+      }
 
-  const { data: roleRes, error: roleErr } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
+      const { data: roleRes, error: roleErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
 
-  if (!alive) return;
+      if (!alive) return;
 
-  if (roleErr) {
-    console.error(roleErr);
-    setRole("member");
-  } else {
-    setRole((roleRes?.role as Role) ?? "member");
-  }
+      if (roleErr) {
+        console.error(roleErr);
+        setRole("member");
+      } else {
+        setRole((roleRes?.role as Role) ?? "member");
+      }
 
-  setLoading(false);
-}
+      setLoading(false);
+    }
 
     loadUserRole();
 
@@ -50,8 +50,8 @@ export default function MembersHome() {
     };
   }, []);
 
-  const role = String(me?.role ?? "member").toLowerCase().trim();
-const isAdmin = role === "admin" || role === "superadmin" || role === "god";
+  const isAdmin =
+    role === "admin" || role === "superadmin" || role === "god";
 
   return (
     <>
@@ -60,17 +60,21 @@ const isAdmin = role === "admin" || role === "superadmin" || role === "god";
         subtitle="Quiet By Design • Presence Over Performance"
         right={
           <>
-       {isAdmin && (
-  <Link className="pill pillPrimary" href="/members/admin">
-    Enter broADMIN
-  </Link>
-)}
+            {isAdmin && (
+              <Link className="pill pillPrimary" href="/members/admin">
+                Enter broADMIN
+              </Link>
+            )}
+
             <Link className="pill" href="/members/profile">
               Profile
             </Link>
-{isAdmin ? (
-  <Link className="pill" href="/members/admin/events">Events</Link>
-) : null}
+
+            {isAdmin && (
+              <Link className="pill" href="/members/admin/events">
+                Events
+              </Link>
+            )}
 
             <Link
               className="pill"
@@ -145,10 +149,7 @@ const isAdmin = role === "admin" || role === "superadmin" || role === "god";
               <Link className="btn btnPrimary" href="/members/lounge">
                 Coming Soon
               </Link>
-              <Link
-                className="btn btnGhost"
-                href="/members/room/weekly"
-              >
+              <Link className="btn btnGhost" href="/members/room/weekly">
                 Next Meeting Room
               </Link>
             </>
