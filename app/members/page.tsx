@@ -52,8 +52,6 @@ export default function MembersHome() {
 
   const role = String(me?.role ?? "member").toLowerCase().trim();
 const isAdmin = role === "admin" || role === "superadmin" || role === "god";
-    [role]
-  );
 
   return (
     <>
