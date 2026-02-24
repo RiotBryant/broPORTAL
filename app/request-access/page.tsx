@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 
-type FormState = {
+type RequestForm = {
   full_name: string;
   preferred_name: string;
   email: string;
@@ -13,20 +13,16 @@ type FormState = {
   referred_by: string;
   looking_for: string;
   why_brother_collective: string;
-  agree_confidentiality: boolean;
+  agree: boolean;
 
   // honeypot
   company: string;
 };
 
 export default function RequestAccessPage() {
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, key);
-  }, []);
+  const router = useRouter();
 
-  const [form, setForm] = useState<FormState>({
+  const [req, setReq] = React.useState<RequestForm>({
     full_name: "",
     preferred_name: "",
     email: "",
@@ -35,50 +31,49 @@ export default function RequestAccessPage() {
     referred_by: "",
     looking_for: "",
     why_brother_collective: "",
-    agree_confidentiality: false,
+    agree: false,
     company: "",
   });
 
-  const [status, setStatus] = useState<
+  const [status, setStatus] = React.useState<
     | { kind: "idle" }
     | { kind: "submitting" }
     | { kind: "success" }
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((p) => ({ ...p, [key]: value }));
+  function setField<K extends keyof RequestForm>(key: K, value: RequestForm[K]) {
+    setReq((p) => ({ ...p, [key]: value }));
   }
 
   const canSubmit =
-    form.full_name.trim().length >= 2 &&
-    form.email.trim().includes("@") &&
-    form.looking_for.trim().length >= 10 &&
-    form.why_brother_collective.trim().length >= 10 &&
-    form.agree_confidentiality &&
+    req.full_name.trim().length >= 2 &&
+    req.email.trim().includes("@") &&
+    req.looking_for.trim().length >= 10 &&
+    req.why_brother_collective.trim().length >= 10 &&
+    req.agree &&
     status.kind !== "submitting";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setStatus({ kind: "submitting" });
 
-    // Bot trap
-    if (form.company.trim().length > 0) {
+    // honeypot bot trap
+    if (req.company.trim().length > 0) {
       setStatus({ kind: "success" });
       return;
     }
 
-    setStatus({ kind: "submitting" });
-
     const payload = {
-      full_name: form.full_name.trim(),
-      preferred_name: form.preferred_name.trim() || null,
-      email: form.email.trim().toLowerCase(),
-      phone: form.phone.trim() || null,
-      location: form.location.trim() || null,
-      referred_by: form.referred_by.trim() || null,
-      looking_for: form.looking_for.trim(),
-      why_brother_collective: form.why_brother_collective.trim(),
-      agree_confidentiality: form.agree_confidentiality,
+      full_name: req.full_name.trim(),
+      preferred_name: req.preferred_name.trim() || null,
+      email: req.email.trim().toLowerCase(),
+      phone: req.phone.trim() || null,
+      location: req.location.trim() || null,
+      referred_by: req.referred_by.trim() || null,
+      looking_for: req.looking_for.trim(),
+      why_brother_collective: req.why_brother_collective.trim(),
+      agree_confidentiality: req.agree,
     };
 
     const { error } = await supabase.from("access_requests").insert(payload);
@@ -96,204 +91,355 @@ export default function RequestAccessPage() {
     setStatus({ kind: "success" });
   }
 
-  return (
-    <div className="min-h-screen w-full bg-[#05050a] text-white">
-      {/* subtle background glow */}
-      <div className="pointer-events-none fixed inset-0 opacity-60">
-        <div className="absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-white/10 blur-[120px]" />
-        <div className="absolute -bottom-40 right-[-120px] h-[520px] w-[520px] rounded-full bg-white/5 blur-[120px]" />
-      </div>
+  const styles = `
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
 
-      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center justify-center px-5 py-10">
-        <div className="w-full max-w-xl">
-          {/* Header */}
-          <div className="mb-6 text-center">
-            <div className="text-xs tracking-[0.35em] text-white/45">broTHER collecTive</div>
-            <h1 className="mt-2 text-3xl font-semibold">Request Access</h1>
-            <p className="mt-2 text-sm text-white/65">
-              Built on presence, not noise. Brotherhood without performance.
-            </p>
+    .page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background:
+        radial-gradient(1200px 700px at 20% 30%, rgba(90,140,255,0.35), transparent 60%),
+        radial-gradient(900px 600px at 80% 70%, rgba(160,120,255,0.25), transparent 55%),
+        linear-gradient(135deg, #5c7cff 0%, #7c78ff 35%, #8db8ff 100%);
+    }
+
+    .cardWrap {
+      width: 100%;
+      max-width: 520px;
+      position: relative;
+    }
+
+    .glassShadow {
+      position: absolute;
+      inset: -26px;
+      border-radius: 26px;
+      background: rgba(255,255,255,0.10);
+      filter: blur(18px);
+      opacity: 0.35;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.06);
+      box-shadow:
+        0 18px 60px rgba(0,0,0,0.25),
+        0 0 0 1px rgba(255,255,255,0.35) inset;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 18px 18px 10px;
+      text-align: center;
+      color: #0b0b12;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: rgba(11,11,18,0.55);
+    }
+
+    .body {
+      padding: 14px 18px 18px;
+      color: #0b0b12;
+    }
+
+    .topRow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .backBtn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(0,0,0,0.04);
+      color: rgba(11,11,18,0.78);
+      font-weight: 900;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 900;
+      color: rgba(11,11,18,0.55);
+    }
+
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .field {
+      margin-top: 10px;
+    }
+
+    .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 800;
+      color: rgba(11,11,18,0.72);
+      margin-bottom: 6px;
+    }
+
+    .input, .textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.92);
+      padding: 10px 11px;
+      font-size: 13px;
+      outline: none;
+      color: #0b0b12;
+      transition: border-color .12s ease, box-shadow .12s ease;
+    }
+
+    .textarea { min-height: 92px; resize: vertical; }
+
+    .input:focus, .textarea:focus {
+      border-color: rgba(75,120,255,0.6);
+      box-shadow: 0 0 0 3px rgba(75,120,255,0.15);
+    }
+
+    .agree {
+      margin-top: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(0,0,0,0.03);
+      color: rgba(11,11,18,0.70);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .agree input { margin-top: 2px; }
+
+    .btnPrimary {
+      margin-top: 14px;
+      width: 100%;
+      height: 40px;
+      border-radius: 10px;
+      border: none;
+      background: #4c78ff;
+      color: white;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    .btnPrimary:hover { transform: translateY(-1px); opacity: 0.95; }
+    .btnPrimary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .error {
+      margin-top: 10px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 70, 70, 0.10);
+      border: 1px solid rgba(255, 70, 70, 0.20);
+      color: rgba(150, 0, 0, 0.95);
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .success {
+      margin-top: 10px;
+      border-radius: 10px;
+      padding: 12px;
+      background: rgba(60, 200, 120, 0.12);
+      border: 1px solid rgba(60, 200, 120, 0.22);
+      color: rgba(0, 80, 40, 0.95);
+      font-weight: 900;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .fineprint {
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(11,11,18,0.55);
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .hidden { display: none; }
+  `;
+
+  return (
+    <div className="page">
+      <style>{styles}</style>
+
+      <div className="cardWrap">
+        <div className="glassShadow" />
+
+        <div className="card">
+          <div className="header">
+            <div className="title">Request Access</div>
+            <div className="subtitle">Built on presence, not noise • reviewed manually</div>
           </div>
 
-          {/* Card */}
-          <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_80px_rgba(0,0,0,0.55)] backdrop-blur">
-            {/* Top row actions */}
-            <div className="mb-5 flex items-center justify-between">
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition"
-              >
+          <div className="body">
+            <div className="topRow">
+              <button type="button" className="backBtn" onClick={() => router.push("/login")}>
                 ← Back to Login
-              </Link>
-
-              <div className="text-xs text-white/45">Reviewed manually</div>
+              </button>
+              <div className="badge">broTHER collecTive</div>
             </div>
 
             {status.kind === "success" ? (
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-5">
-                <div className="text-lg font-semibold">Request received.</div>
-                <p className="mt-2 text-sm text-white/70">
-                  You’ll hear back after review. Keep an eye on your email.
-                </p>
-                <div className="mt-4">
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 transition"
-                  >
-                    Return to Login
-                  </Link>
-                </div>
-              </div>
+              <>
+                <div className="success">Request received. You’ll hear back after review.</div>
+                <div className="fineprint">Keep an eye on your email.</div>
+              </>
             ) : (
-              <form onSubmit={onSubmit} className="space-y-4">
+              <form onSubmit={onSubmit}>
                 {/* honeypot */}
                 <div className="hidden">
-                  <label>
-                    Company
-                    <input value={form.company} onChange={(e) => update("company", e.target.value)} />
-                  </label>
+                  <label className="label">Company</label>
+                  <input className="input" value={req.company} onChange={(e) => setField("company", e.target.value)} />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Field label="Full name" required>
+                <div className="row2">
+                  <div className="field">
+                    <label className="label">Full name</label>
                     <input
-                      value={form.full_name}
-                      onChange={(e) => update("full_name", e.target.value)}
+                      className="input"
                       placeholder="First + last"
+                      value={req.full_name}
+                      onChange={(e) => setField("full_name", e.target.value)}
                       autoComplete="name"
-                      className={inputClass}
+                      required
                     />
-                  </Field>
+                  </div>
 
-                  <Field label="Preferred name">
+                  <div className="field">
+                    <label className="label">Preferred name</label>
                     <input
-                      value={form.preferred_name}
-                      onChange={(e) => update("preferred_name", e.target.value)}
+                      className="input"
                       placeholder="What should we call you?"
-                      className={inputClass}
+                      value={req.preferred_name}
+                      onChange={(e) => setField("preferred_name", e.target.value)}
                     />
-                  </Field>
-
-                  <Field label="Email" required>
-                    <input
-                      value={form.email}
-                      onChange={(e) => update("email", e.target.value)}
-                      placeholder="you@email.com"
-                      autoComplete="email"
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <Field label="Phone (optional)">
-                    <input
-                      value={form.phone}
-                      onChange={(e) => update("phone", e.target.value)}
-                      placeholder="(###) ###-####"
-                      autoComplete="tel"
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <Field label="Location (general)">
-                    <input
-                      value={form.location}
-                      onChange={(e) => update("location", e.target.value)}
-                      placeholder="City / State"
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <Field label="Referred by (if applicable)">
-                    <input
-                      value={form.referred_by}
-                      onChange={(e) => update("referred_by", e.target.value)}
-                      placeholder="Name or @handle"
-                      className={inputClass}
-                    />
-                  </Field>
+                  </div>
                 </div>
 
-                <Field label="What are you looking for right now?" required>
+                <div className="row2">
+                  <div className="field">
+                    <label className="label">Email</label>
+                    <input
+                      className="input"
+                      placeholder="you@email.com"
+                      value={req.email}
+                      onChange={(e) => setField("email", e.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label">Phone (optional)</label>
+                    <input
+                      className="input"
+                      placeholder="(###) ###-####"
+                      value={req.phone}
+                      onChange={(e) => setField("phone", e.target.value)}
+                      autoComplete="tel"
+                    />
+                  </div>
+                </div>
+
+                <div className="row2">
+                  <div className="field">
+                    <label className="label">Location (general)</label>
+                    <input
+                      className="input"
+                      placeholder="City / State"
+                      value={req.location}
+                      onChange={(e) => setField("location", e.target.value)}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label">Referred by (optional)</label>
+                    <input
+                      className="input"
+                      placeholder="Name or @handle"
+                      value={req.referred_by}
+                      onChange={(e) => setField("referred_by", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="label">What are you looking for right now?</label>
                   <textarea
-                    value={form.looking_for}
-                    onChange={(e) => update("looking_for", e.target.value)}
+                    className="textarea"
                     placeholder="A steady room. Accountability. Support. Keep it high level."
-                    className={textareaClass}
+                    value={req.looking_for}
+                    onChange={(e) => setField("looking_for", e.target.value)}
+                    required
                   />
-                </Field>
+                </div>
 
-                <Field label="Why Brother Collective specifically?" required>
+                <div className="field">
+                  <label className="label">Why Brother Collective specifically?</label>
                   <textarea
-                    value={form.why_brother_collective}
-                    onChange={(e) => update("why_brother_collective", e.target.value)}
+                    className="textarea"
                     placeholder="What made you choose this space?"
-                    className={textareaClass}
+                    value={req.why_brother_collective}
+                    onChange={(e) => setField("why_brother_collective", e.target.value)}
+                    required
                   />
-                </Field>
+                </div>
 
-                <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <input
-                    type="checkbox"
-                    checked={form.agree_confidentiality}
-                    onChange={(e) => update("agree_confidentiality", e.target.checked)}
-                    className="mt-1 h-4 w-4"
-                  />
-                  <span className="text-sm text-white/75">
+                <label className="agree">
+                  <input type="checkbox" checked={req.agree} onChange={(e) => setField("agree", e.target.checked)} />
+                  <span>
                     I understand this is a respectful, confidential space and I’m willing to follow structure.
                   </span>
                 </label>
 
-                {status.kind === "error" ? (
-                  <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100">
-                    {status.message}
-                  </div>
-                ) : null}
+                {status.kind === "error" ? <div className="error">{status.message}</div> : null}
 
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className="w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-white/90 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {status.kind === "submitting" ? "Submitting…" : "Submit request"}
+                <button type="submit" className="btnPrimary" disabled={!canSubmit}>
+                  {status.kind === "submitting" ? "Submitting…" : "Submit Request"}
                 </button>
 
-                <p className="text-xs text-white/45">
+                <div className="fineprint">
                   Don’t overshare. Keep it high level. You’ll get next steps after review.
-                </p>
+                </div>
               </form>
             )}
           </div>
-
-          <p className="mt-6 text-center text-xs text-white/35">
-            If you were sent here automatically, logging in will return you to the page you tried to open.
-          </p>
         </div>
       </div>
     </div>
   );
 }
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-2 text-xs tracking-wide text-white/60">
-        {label} {required ? <span className="text-white/35">*</span> : null}
-      </div>
-      {children}
-    </label>
-  );
-}
-
-const inputClass =
-  "w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-white/25 focus:bg-black/35 transition";
-
-const textareaClass =
-  "min-h-[110px] w-full rounded-xl border border-white/12 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-white/25 focus:bg-black/35 transition";
