@@ -165,7 +165,7 @@ function LoginInner() {
           <button
             type="button"
             className="btn btnSecondary"
-            onClick={() => router.push("/members/reset-password")}
+            onClick={() => router.push("/reset-password")}
           >
             Forgot password
           </button>
