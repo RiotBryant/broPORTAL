@@ -27,15 +27,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { data: me } = await supabase
     .from("profiles")
     .select("role, display_name, full_name, email")
-    .eq("id", auth.user.id)
+    .eq("user_id", auth.user.id)
     .maybeSingle();
 
-  // ✅ Role normalization + correct gate
-  const rawRole = (me as any)?.role ?? "member";
-  const role = String(rawRole).toLowerCase().trim();
+ const role = String((me as any)?.role ?? "member").toLowerCase().trim();
 
-  const canEnterAdmin = role === "admin" || role === "superadmin" || role === "god";
-  if (!canEnterAdmin) redirect("/members");
+const canEnterAdmin = role === "admin" || role === "superadmin" || role === "god";
+if (!canEnterAdmin) redirect("/members");
 
   const name =
     (me as any)?.display_name || (me as any)?.full_name || (me as any)?.email || "Admin";
