@@ -159,6 +159,9 @@ function LoginInner() {
           <button type="submit" className="btn btnPrimary" disabled={loading}>
             {loading ? "Entering..." : "Enter Portal"}
           </button>
+            type="button"
+            className="btn btnSecondary"
+            onClick={() => router.push("/members")}
         </form>
 
         <div className="btnRow">
