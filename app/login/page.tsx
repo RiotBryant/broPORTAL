@@ -8,7 +8,7 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // ✅ FIX: support both ?next= and ?redirect=
+  // ✅ support both ?next= and ?redirect=
   const redirectTo = searchParams.get("next") || searchParams.get("redirect") || "/members";
 
   const [email, setEmail] = React.useState("");
@@ -21,7 +21,6 @@ function LoginInner() {
     setError(null);
     setLoading(true);
 
-    // ✅ FIX: normalize email (prevents dumb auth mismatches)
     const em = email.trim().toLowerCase();
 
     const { error } = await supabase.auth.signInWithPassword({ email: em, password });
@@ -32,10 +31,10 @@ function LoginInner() {
       return;
     }
 
-    // ✅ FIX: ensure session/cookie is present before routing
+    // ensure session/cookie is present before routing
     await supabase.auth.getSession();
 
-    // ✅ FIX: navigate AND refresh so middleware/server sees auth
+    // navigate + refresh so middleware/server sees auth
     router.replace(redirectTo);
     router.refresh();
 
@@ -159,9 +158,6 @@ function LoginInner() {
           <button type="submit" className="btn btnPrimary" disabled={loading}>
             {loading ? "Entering..." : "Enter Portal"}
           </button>
-            type="button"
-            className="btn btnSecondary"
-            onClick={() => router.push("/members")}
         </form>
 
         <div className="btnRow">
