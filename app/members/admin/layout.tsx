@@ -22,17 +22,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
 
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) redirect("/login?redirect=/members/admin");
+if (!auth?.user) redirect("/login?redirect=/members/admin");
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role, display_name, full_name, email")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
+const { data: roleRes, error: roleErr } = await supabase
+  .from("user_roles")
+  .select("role")
+  .eq("user_id", auth.user.id)
+  .single();
 
- const role = String((me as any)?.role ?? "member").toLowerCase().trim();
+if (roleErr || !roleRes?.role) redirect("/members");
 
-const canEnterAdmin = role === "admin" || role === "superadmin" || role === "god";
+const role = String(roleRes.role).toLowerCase().trim();
+
+const canEnterAdmin =
+  role === "admin" ||
+  role === "superadmin" ||
+  role === "god";
+
 if (!canEnterAdmin) redirect("/members");
 
   const name =
