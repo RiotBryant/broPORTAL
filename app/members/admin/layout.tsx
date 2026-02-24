@@ -30,8 +30,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq("id", auth.user.id)
     .maybeSingle();
 
-  const rawRole = (me as any)?.role ?? "";
-const role = String(rawRole).toLowerCase().trim();
+const role = String((me as any)?.role ?? "member").toLowerCase().trim();
+
+const canEnterAdmin = role === "admin" || role === "superadmin" || role === "god";
+if (!canEnterAdmin) redirect("/members");
 
 // allow variations: super_admin, SUPERADMIN, admin, etc.
 const isAdmin =
@@ -41,7 +43,7 @@ const isAdmin =
   role === "superadmin" ||
   role.includes("admin");
 
-if (!isAdmin) redirect("/members");
+if (!canEnterAdmin) redirect("/members");
 
   const name =
     (me as any)?.display_name || (me as any)?.full_name || (me as any)?.email || "Admin";
